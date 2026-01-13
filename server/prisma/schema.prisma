@@ -1,0 +1,123 @@
+// server/prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 1. USUARIOS Y ROLES
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+model User {
+  id                  Int          @id @default(autoincrement())
+  email               String       @unique
+  password            String
+  fullName            String
+  role                Role         @default(STUDENT)
+  createdAt           DateTime     @default(now())
+  
+  // Relación con Carrera
+  careerId            Int?
+  career              Career?      @relation(fields: [careerId], references: [id])
+
+  enrollments         Enrollment[]
+  teachingAssignments Parallel[]
+}
+
+model Career {
+  id             Int       @id @default(autoincrement())
+  name           String
+  totalSemesters Int
+  subjects       Subject[]
+  users          User[]
+}
+
+model Subject {
+  id            Int          @id @default(autoincrement())
+  name          String
+  semesterLevel Int
+  
+  careerId      Int
+  career        Career       @relation(fields: [careerId], references: [id])
+  
+  parallels     Parallel[]
+  enrollments   Enrollment[] // <--- Relación necesaria para el historial
+}
+
+// 3. GESTIÓN DE TIEMPO Y PERIODOS
+model AcademicPeriod {
+  id        Int        @id @default(autoincrement())
+  name      String
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean    @default(false)
+  
+  parallels Parallel[]
+}
+
+model Parallel {
+  id        Int            @id @default(autoincrement())
+  code      String
+  capacity  Int            @default(30)
+  
+  subjectId Int
+  subject   Subject        @relation(fields: [subjectId], references: [id])
+  
+  periodId  Int
+  period    AcademicPeriod @relation(fields: [periodId], references: [id])
+  
+  teacherId Int?
+  teacher   User?          @relation(fields: [teacherId], references: [id])
+  
+  schedules Schedule[]
+
+  // NOTA: He quitado la relación 'enrollments' aquí temporalmente porque
+  // 'Enrollment' ahora está vinculado a 'Subject', no a 'Parallel'.
+  // Más adelante crearemos una tabla 'ClassRegistration' para la toma de horarios.
+
+  @@unique([periodId, subjectId, code])
+}
+
+// 4. HORARIOS FIJOS
+model Schedule {
+  id         Int      @id @default(autoincrement())
+  dayOfWeek  Int
+  startTime  String
+  endTime    String
+  
+  parallelId Int
+  parallel   Parallel @relation(fields: [parallelId], references: [id])
+}
+
+// 5. HISTORIAL ACADÉMICO (Enrollment Definitivo)
+enum AcademicStatus {
+  PENDING
+  TAKING
+  APPROVED
+  FAILED
+}
+
+model Enrollment {
+  id         Int            @id @default(autoincrement())
+  status     AcademicStatus @default(PENDING)
+  finalGrade Float?         // Nota final
+  
+  userId     Int
+  user       User           @relation(fields: [userId], references: [id])
+  
+  subjectId  Int
+  subject    Subject        @relation(fields: [subjectId], references: [id])
+
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@unique([userId, subjectId]) 
+}
