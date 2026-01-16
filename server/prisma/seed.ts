@@ -1,5 +1,3 @@
-// server/prisma/seed.ts
-
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -299,7 +297,16 @@ const CARRERAS_COMPLETAS = [
 async function main() {
   console.log('🌱 Iniciando carga COMPLETA de mallas FICA - ingenIA-Q...');
 
-  // 1. Crear las Carreras y sus Materias
+  // 1. Limpieza de base de datos para evitar duplicados
+  await prisma.enrollment.deleteMany();
+  await prisma.schedule.deleteMany();
+  await prisma.parallel.deleteMany();
+  await prisma.subject.deleteMany();
+  await prisma.career.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.academicPeriod.deleteMany();
+
+  // 2. Crear las Carreras y sus Materias
   for (const careerInfo of CARRERAS_COMPLETAS) {
     console.log(`📚 Procesando carrera: ${careerInfo.name}`);
 
@@ -315,13 +322,12 @@ async function main() {
     console.log(`   -> ✅ Se insertaron ${careerInfo.subjects.length} materias correctamente.`);
   }
 
-  // 2. Crear Usuarios (Admin y Estudiante)
-  const hashedPassword = await bcrypt.hash('admin123', 10);
+  // 3. Crear Usuarios (Admin, Estudiante, Docente)
+  const hashedPassword = await bcrypt.hash('admin123', 10); // Contraseña para todos
 
-  const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@fica.edu.ec' },
-    update: {},
-    create: {
+  // -- ADMIN
+  const adminUser = await prisma.user.create({
+    data: {
       email: 'admin@fica.edu.ec',
       fullName: 'Administrador FICA',
       password: hashedPassword,
@@ -330,15 +336,25 @@ async function main() {
   });
   console.log(`👤 Usuario Admin: ${adminUser.email}`);
 
-  // Buscamos la carrera de Sistemas (para el estudiante)
+  // -- DOCENTE (Nuevo Agregado)
+  const teacherUser = await prisma.user.create({
+    data: {
+      email: 'profe@fica.edu.ec',
+      fullName: 'Ing. Roberto Dávila',
+      password: hashedPassword,
+      role: 'TEACHER',
+    }
+  });
+  console.log(`👨‍🏫 Usuario Docente: ${teacherUser.email}`);
+
+
+  // -- ESTUDIANTE
   const sistemasCareer = await prisma.career.findFirst({
     where: { name: { contains: 'Sistemas' } }
   });
 
-  const studentUser = await prisma.user.upsert({
-    where: { email: 'estudiante@fica.edu.ec' },
-    update: {},
-    create: {
+  const studentUser = await prisma.user.create({
+    data: {
       email: 'estudiante@fica.edu.ec',
       fullName: 'Juan Pérez',
       password: hashedPassword,
@@ -346,9 +362,9 @@ async function main() {
       careerId: sistemasCareer?.id
     },
   });
-  console.log(`🎓 Usuario Estudiante: ${studentUser.email} (Carrera ID: ${sistemasCareer?.id})`);
+  console.log(`🎓 Usuario Estudiante: ${studentUser.email}`);
 
-  // 3. CREAR PERIODO ACADÉMICO (PRIMERO)
+  // 4. CREAR PERIODO ACADÉMICO
   console.log('📅 Creando Periodo Académico...');
   const periodoActual = await prisma.academicPeriod.create({
     data: {
@@ -359,12 +375,12 @@ async function main() {
     }
   });
 
-  // 4. SIMULAR HISTORIAL Y CREAR HORARIOS PARA ESTUDIANTE
+  // 5. SIMULAR HISTORIAL Y CREAR HORARIOS PARA ESTUDIANTE
   const materiasSistemas = await prisma.subject.findMany({
     where: { careerId: sistemasCareer?.id }
   });
 
-  console.log('📝 Creando historial y horarios del estudiante...');
+  console.log('📝 Creando historial, horarios y asignando al docente...');
   const dias = [1, 2, 3, 4, 5]; // Lunes a Viernes
 
   for (const materia of materiasSistemas) {
@@ -390,15 +406,49 @@ async function main() {
       });
     }
 
-    // B. CREAR HORARIOS (Solo para las que está cursando)
+    // B. CREAR HORARIOS Y PARALELOS (Solo para las que está cursando)
     if (estado === 'TAKING') {
+      // Creamos el paralelo y ASIGNAMOS AL DOCENTE CREADO
       const paralelo = await prisma.parallel.create({
         data: {
           code: 'A',
           subjectId: materia.id,
           periodId: periodoActual.id,
-          capacity: 30
+          capacity: 30,
+          teacherId: teacherUser.id // <--- ¡AQUÍ ESTÁ LA MAGIA! Asignamos al Ing. Dávila
         }
+      });
+
+      // C. CREAR ESTRUCTURA DE EVALUACIÓN ESTÁTICA
+      console.log('📊 Creando estructura de evaluación estática...');
+
+      await prisma.activity.createMany({
+        data: [
+          {
+            name: "Gestión Individual (Talleres/Deberes)",
+            type: "INDIVIDUAL",
+            maxScore: 7.0,
+            parallelId: paralelo.id
+          },
+          {
+            name: "Gestión Grupal (Proyectos)",
+            type: "GRUPAL",
+            maxScore: 5.0,
+            parallelId: paralelo.id
+          },
+          {
+            name: "Examen Medio Semestre",
+            type: "MEDIO",
+            maxScore: 2.0,
+            parallelId: paralelo.id
+          },
+          {
+            name: "Examen Final",
+            type: "FINAL",
+            maxScore: 6.0,
+            parallelId: paralelo.id
+          }
+        ]
       });
 
       const dia1 = dias[Math.floor(Math.random() * dias.length)];
@@ -421,8 +471,8 @@ async function main() {
     }
   }
 
-
-} // <--- ESTA LLAVE CIERRA EL MAIN (¡Es la importante!)
+  console.log('✅ Seed completado exitosamente.');
+}
 
 main()
   .catch((e) => {

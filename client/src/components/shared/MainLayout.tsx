@@ -5,13 +5,13 @@ import { Sidebar } from './Sidebar';
 import { Menu } from 'lucide-react'; // Importamos el icono de hamburguesa
 
 export const MainLayout = () => {
-  const { isAuth, token } = useAuthStore();
+  const { isAuthenticated, token } = useAuthStore();
   
   // Estado para controlar si el sidebar está abierto o cerrado en móvil
   const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   // Protección de ruta
-  if (!isAuth || !token) {
+  if (!isAuthenticated || !token) {
     return <Navigate to="/login" replace />;
   }
 

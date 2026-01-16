@@ -1,6 +1,11 @@
 import { Router } from "express";
 import { checkJwt } from "../middleware/session";
-import { getStudentStats, getWeeklySchedule } from "../controllers/student";
+import { 
+  getStudentStats, 
+  getWeeklySchedule, 
+  getStudentGrades,
+  getStudentCourseDetails // <--- Importar
+} from "../controllers/student";
 
 const router = Router();
 
@@ -11,5 +16,7 @@ router.get("/stats", checkJwt, getStudentStats);
 
 // Esta ya la tenías bien:
 router.get("/schedule", checkJwt, getWeeklySchedule);
+
+router.get("/course/:courseId", checkJwt, getStudentCourseDetails);
 
 export { router };
