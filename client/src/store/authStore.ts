@@ -1,20 +1,19 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 
-// Definimos qué forma tiene el Usuario
 interface User {
   id: number;
   fullName: string;
   email: string;
   role: 'STUDENT' | 'TEACHER' | 'ADMIN';
+  careerId?: number;
 }
 
-// Definimos qué acciones tiene nuestro "Almacén"
 interface AuthState {
   token: string | null;
   user: User | null;
-  isAuth: boolean;
-  setLogin: (token: string, user: User) => void;
+  isAuthenticated: boolean; // <--- CAMBIADO: Antes era isAuth
+  login: (token: string, user: User) => void; // <--- CAMBIADO: Antes era setLogin
   logout: () => void;
 }
 
@@ -23,16 +22,25 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
-      isAuth: false,
+      isAuthenticated: false, // <--- CAMBIADO
 
       // Acción: Cuando el usuario se loguea
-      setLogin: (token, user) => set({ token, user, isAuth: true }),
+      login: (token, user) => set({ 
+        token, 
+        user, 
+        isAuthenticated: true 
+      }),
 
       // Acción: Cerrar sesión (borra todo)
-      logout: () => set({ token: null, user: null, isAuth: false }),
+      logout: () => set({ 
+        token: null, 
+        user: null, 
+        isAuthenticated: false 
+      }),
     }),
     {
-      name: 'ingeniaq-storage', // Nombre con el que se guarda en el navegador
+      name: 'ingeniaq-auth', // Nombre en LocalStorage
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );

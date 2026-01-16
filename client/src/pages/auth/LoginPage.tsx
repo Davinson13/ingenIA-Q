@@ -10,22 +10,33 @@ export const LoginPage = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [isLoading, setIsLoading] = useState(false); // Estado para efecto de carga
+    const [isLoading, setIsLoading] = useState(false);
 
-    const setLogin = useAuthStore((state) => state.setLogin);
+    // CORRECCIÓN: Usamos 'login' en lugar de 'setLogin'
+    const login = useAuthStore((state) => state.login);
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        setIsLoading(true); // Activar spinner o estado de carga
+        setIsLoading(true);
 
         try {
             const res = await api.post('/auth/login', { email, password });
-            const { token, user } = res.data.data;
             
-            setLogin(token, user);
-            navigate('/dashboard');
+            // Verificamos si la respuesta viene directa o anidada en 'data'
+            const data = res.data.data || res.data;
+            const { token, user } = data;
+            
+            // CORRECCIÓN: Llamamos a la función login
+            login(token, user);
+            
+            // Redirección inteligente según rol
+            if (user.role === 'TEACHER' || user.role === 'ADMIN') {
+                navigate('/teacher/dashboard');
+            } else {
+                navigate('/dashboard');
+            }
 
         } catch (err: unknown) {
             console.error(err);
@@ -34,20 +45,18 @@ export const LoginPage = () => {
             if (axios.isAxiosError(err)) {
                 if (err.response) {
                     const { status, data } = err.response;
-                    if (status === 404 && data === 'USER_NOT_FOUND') {
+                    if (status === 404) {
                         setError("El correo no está registrado.");
                     } else if (status === 401) {
                         setError("Contraseña incorrecta.");
                     } else {
-                        setError("Error del servidor.");
+                        setError(typeof data === 'string' ? data : "Error del servidor.");
                     }
                 } else if (err.code === 'ERR_NETWORK') {
                     setError("No se pudo conectar con el servidor.");
                 } else {
                     setError("Error de red inesperado.");
                 }
-            } else if (err instanceof Error) {
-                setError(err.message);
             } else {
                 setError("Ocurrió un error desconocido.");
             }
@@ -56,34 +65,18 @@ export const LoginPage = () => {
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 via-white to-blue-50 relative overflow-hidden">
-            
-            {/* Decoración de Fondo (Círculos difuminados) */}
             <div className="absolute top-[-10%] right-[-5%] w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
             <div className="absolute bottom-[-10%] left-[-5%] w-96 h-96 bg-indigo-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
 
-            {/* Tarjeta Principal */}
             <div className="w-full max-w-md bg-white/80 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 p-8 transform transition-all hover:scale-[1.01] duration-300">
-                
-                {/* 1. LOGO Y ENCABEZADO */}
                 <div className="text-center mb-8">
-                    {/* Contenedor del Logo: Le quitamos el fondo de color para que luzca tu imagen limpia */}
                     <div className="inline-flex items-center justify-center w-40 h-40 mb-4">
-                        <img 
-                            src={logoImg} 
-                            alt="Logo ingenIA-Q" 
-                            className="w-full h-full object-contain drop-shadow-lg" 
-                        />
+                        <img src={logoImg} alt="Logo ingenIA-Q" className="w-full h-full object-contain drop-shadow-lg" />
                     </div>
-                    
-                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">
-                        ingenIA-Q
-                    </h2>
-                    <p className="text-slate-500 mt-2 text-sm">
-                        Sistema de Gestión Académica Inteligente
-                    </p>
+                    <h2 className="text-3xl font-bold text-slate-800 tracking-tight">ingenIA-Q</h2>
+                    <p className="text-slate-500 mt-2 text-sm">Sistema de Gestión Académica Inteligente</p>
                 </div>
 
-                {/* MENSAJE DE ERROR */}
                 {error && (
                     <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                         <div className="w-1 h-8 bg-red-500 rounded-full"></div>
@@ -91,14 +84,9 @@ export const LoginPage = () => {
                     </div>
                 )}
 
-                {/* FORMULARIO */}
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    
-                    {/* Input Correo */}
                     <div className="space-y-1">
-                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider ml-1">
-                            Correo Institucional
-                        </label>
+                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider ml-1">Correo Institucional</label>
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <Mail className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
@@ -114,11 +102,8 @@ export const LoginPage = () => {
                         </div>
                     </div>
 
-                    {/* Input Contraseña */}
                     <div className="space-y-1">
-                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider ml-1">
-                            Contraseña
-                        </label>
+                        <label className="text-xs font-semibold text-slate-600 uppercase tracking-wider ml-1">Contraseña</label>
                         <div className="relative group">
                             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 <Lock className="h-5 w-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
@@ -134,7 +119,6 @@ export const LoginPage = () => {
                         </div>
                     </div>
 
-                    {/* Botón de Submit */}
                     <button
                         type="submit"
                         disabled={isLoading}
@@ -143,14 +127,9 @@ export const LoginPage = () => {
                         {isLoading ? 'Ingresando...' : 'Iniciar Sesión'}
                         {!isLoading && <ArrowRight className="w-4 h-4" />}
                     </button>
-                    
                 </form>
-
-                {/* Footer simple */}
                 <div className="mt-8 text-center">
-                    <p className="text-xs text-slate-400">
-                        © 2026 Facultad de Ingeniería y Ciencias Aplicadas
-                    </p>
+                    <p className="text-xs text-slate-400">© 2026 Facultad de Ingeniería y Ciencias Aplicadas</p>
                 </div>
             </div>
         </div>

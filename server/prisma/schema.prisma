@@ -30,6 +30,10 @@ model User {
 
   enrollments         Enrollment[]
   teachingAssignments Parallel[]
+
+  tutoringsCreated Tutoring[] @relation("TeacherTutorings")
+  tutoringBookings TutoringBooking[]
+  activityGrades ActivityGrade[]
 }
 
 model Career {
@@ -49,9 +53,11 @@ model Subject {
   career        Career       @relation(fields: [careerId], references: [id])
   
   parallels     Parallel[]
-  enrollments   Enrollment[] // <--- Relación necesaria para el historial
+  enrollments   Enrollment[]
+  
+  // --- AGREGA SOLO ESTA LÍNEA ---
+  tutorings     Tutoring[] 
 }
-
 // 3. GESTIÓN DE TIEMPO Y PERIODOS
 model AcademicPeriod {
   id        Int        @id @default(autoincrement())
@@ -84,6 +90,7 @@ model Parallel {
   // Más adelante crearemos una tabla 'ClassRegistration' para la toma de horarios.
 
   @@unique([periodId, subjectId, code])
+  activities Activity[]
 }
 
 // 4. HORARIOS FIJOS
@@ -120,4 +127,72 @@ model Enrollment {
   updatedAt  DateTime       @updatedAt
 
   @@unique([userId, subjectId]) 
+}
+
+// ... modelos anteriores ...
+
+// MODELO DE TUTORÍAS (Para el futuro módulo de Calendario)
+model Tutoring {
+  id        Int      @id @default(autoincrement())
+  date      DateTime // Fecha y Hora
+  capacity  Int      // Cupos disponibles
+  notes     String?  // Tema o descripción
+  
+  // Relación con el Profe
+  teacherId Int
+  teacher   User     @relation("TeacherTutorings", fields: [teacherId], references: [id])
+  
+  // Relación con Materia (Opcional, puede ser tutoría general)
+  subjectId Int?
+  subject   Subject? @relation(fields: [subjectId], references: [id])
+  
+  // Lista de estudiantes inscritos
+  bookings  TutoringBooking[]
+  
+  createdAt DateTime @default(now())
+}
+
+// TABLA INTERMEDIA (Estudiantes inscritos en la tutoría)
+model TutoringBooking {
+  id         Int      @id @default(autoincrement())
+  tutoringId Int
+  tutoring   Tutoring @relation(fields: [tutoringId], references: [id])
+  
+  studentId  Int
+  student    User     @relation(fields: [studentId], references: [id])
+  
+  createdAt  DateTime @default(now())
+}
+
+// --- NUEVOS MODELOS PARA ACTIVIDADES ---
+
+model Activity {
+  id          Int      @id @default(autoincrement())
+  name        String   // Ej: "Ensayo de Historia", "Examen 1"
+  description String?
+  type        String   // INDIVIDUAL, GRUPAL, MEDIO, FINAL
+  maxScore    Float    // Ej: 7, 5, 2, 6
+  
+  parallelId  Int
+  parallel    Parallel @relation(fields: [parallelId], references: [id])
+  
+  grades      ActivityGrade[]
+  
+  createdAt   DateTime @default(now())
+}
+
+model ActivityGrade {
+  id          Int      @id @default(autoincrement())
+  score       Float    // La nota que sacó (Ej: 6.5)
+  feedback    String?  // Comentario del profe
+  
+  activityId  Int
+  activity    Activity @relation(fields: [activityId], references: [id])
+  
+  studentId   Int
+  student     User     @relation(fields: [studentId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([activityId, studentId]) // Un estudiante solo tiene una nota por actividad
 }

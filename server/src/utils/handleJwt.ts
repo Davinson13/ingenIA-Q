@@ -6,12 +6,14 @@ const JWT_SECRET = process.env.JWT_SECRET || "token.01010101";
 const tokenSign = async (user: any) => {
   const sign = jwt.sign(
     {
-      _id: user.id,
+      // CAMBIO CRÍTICO: PostgreSQL usa 'id', no '_id'.
+      // Al cambiar esto aquí, todo tu sistema volverá a sincronizarse.
+      id: user.id, 
       role: user.role,
     },
     JWT_SECRET,
     {
-      expiresIn: "1h", // El login dura 1 hora
+      expiresIn: "2h", // Aumenté a 2h para que no te saque tan rápido en pruebas
     }
   );
   return sign;
