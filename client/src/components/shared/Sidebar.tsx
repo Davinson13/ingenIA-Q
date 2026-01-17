@@ -8,7 +8,8 @@ import {
   LogOut,
   X,
   GraduationCap, 
-  ClipboardList
+  ClipboardList,
+  UserCheck
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -45,6 +46,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Mis Cursos', path: '/teacher/courses', icon: BookOpen },
     { label: 'Actividades', path: '/teacher/activities', icon: ClipboardList },
     { label: 'Calificaciones', path: '/teacher/grades', icon: GraduationCap },
+    { label: 'Asistencia', path: '/teacher/attendance', icon: UserCheck },
     { label: 'Agenda', path: '/teacher/calendar', icon: CalendarDays },
   ];
 

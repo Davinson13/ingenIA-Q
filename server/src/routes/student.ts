@@ -4,7 +4,7 @@ import {
   getStudentStats, 
   getWeeklySchedule, 
   getStudentGrades,
-  getStudentCourseDetails // <--- Importar
+  getStudentCourseDetails
 } from "../controllers/student";
 
 const router = Router();

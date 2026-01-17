@@ -14,8 +14,9 @@ import { AiTutorPage } from './pages/student/AiTutorPage';
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
 import { TeacherCoursesPage } from './pages/teacher/TeacherCoursesPage';
 import { TeacherGradesPage } from './pages/teacher/TeacherGradesPage';
+import { TeacherAttendancePage } from './pages/teacher/TeacherAttendancePage';
+import { TeacherCalendarPage } from './pages/teacher/TeacherCalendarPage';
 // Puedes importar las otras páginas cuando las crees realmente
-// import { TeacherCoursesPage } from './pages/teacher/TeacherCoursesPage'; 
 
 function App() {
   return (
@@ -50,7 +51,11 @@ function App() {
           <Route path="activities" element={<div className="p-10">Actividades (En construcción)</div>} />
           <Route path="grades" element={<TeacherGradesPage />} />
           {/* Reutilizamos el calendario de estudiantes por ahora */}
-          <Route path="calendar" element={<CalendarPage />} /> 
+          
+          <Route path="attendance" element={<TeacherAttendancePage />} />
+          <Route path="calendar" element={<TeacherCalendarPage />} />
+
+
         </Route>
       </Route>
 

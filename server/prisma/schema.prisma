@@ -85,6 +85,8 @@ model Parallel {
   
   schedules Schedule[]
 
+  events      Event[]
+
   // NOTA: He quitado la relación 'enrollments' aquí temporalmente porque
   // 'Enrollment' ahora está vinculado a 'Subject', no a 'Parallel'.
   // Más adelante crearemos una tabla 'ClassRegistration' para la toma de horarios.
@@ -122,6 +124,8 @@ model Enrollment {
   
   subjectId  Int
   subject    Subject        @relation(fields: [subjectId], references: [id])
+
+   attendance Attendance[]
 
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
@@ -195,4 +199,36 @@ model ActivityGrade {
   createdAt   DateTime @default(now())
   
   @@unique([activityId, studentId]) // Un estudiante solo tiene una nota por actividad
+}
+
+// 1. AGREGA ESTO AL FINAL DEL ARCHIVO
+model Attendance {
+  id           Int      @id @default(autoincrement())
+  date         DateTime @db.Date // Solo nos interesa la fecha
+  status       AttendanceStatus @default(PRESENT)
+  
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  enrollmentId Int
+
+  // Evita duplicados: Un estudiante solo puede tener una asistencia por día
+  @@unique([date, enrollmentId]) 
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+// 1. AGREGA ESTO AL FINAL
+model Event {
+  id          Int      @id @default(autoincrement())
+  title       String   // Ej: "Examen Parcial 1"
+  description String?
+  date        DateTime // Fecha y hora del evento
+  type        String   // INDIVIDUAL, GRUPAL, MEDIO, FINAL (Para saber a qué categoría pertenece)
+  
+  parallel    Parallel @relation(fields: [parallelId], references: [id])
+  parallelId  Int
 }

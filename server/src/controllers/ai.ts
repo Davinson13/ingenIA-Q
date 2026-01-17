@@ -41,7 +41,6 @@ const chatWithAi = async (req: RequestWithUser, res: Response) => {
       if (approvedSubjects.length > 0) {
         const sum = approvedSubjects.reduce((acc, curr) => acc + (curr.finalGrade || 0), 0);
 
-        // CORRECCIÓN AQUÍ: Usamos 'approvedSubjects' en lugar de 'approved'
         const avg = (sum / approvedSubjects.length).toFixed(2);
 
         aiResponse = `Tu promedio académico actual es de **${avg}/10**, calculado sobre ${approvedSubjects.length} materias aprobadas. 📊`;
@@ -54,7 +53,6 @@ const chatWithAi = async (req: RequestWithUser, res: Response) => {
     else if (lowerQuestion.includes("cursando") || lowerQuestion.includes("viendo") || lowerQuestion.includes("actual") || lowerQuestion.includes("materias")) {
       if (takingSubjects.length > 0) {
         const lista = takingSubjects.map(t => t.subject.name).join(', ');
-        // CORRECCIÓN AQUÍ: Usamos 'takingSubjects'
         const maxSemester = Math.max(...takingSubjects.map(t => t.subject.semesterLevel));
         aiResponse = `Este semestre (Nivel ${maxSemester}) estás cursando **${takingSubjects.length} materias**: \n\n🔹 ${lista}. \n\n¡Organízate bien! 📅`;
       } else {
