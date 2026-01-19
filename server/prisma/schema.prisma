@@ -86,13 +86,15 @@ model Parallel {
   schedules Schedule[]
 
   events      Event[]
+  activities Activity[]
+  enrollments Enrollment[]
 
   // NOTA: He quitado la relación 'enrollments' aquí temporalmente porque
   // 'Enrollment' ahora está vinculado a 'Subject', no a 'Parallel'.
   // Más adelante crearemos una tabla 'ClassRegistration' para la toma de horarios.
 
   @@unique([periodId, subjectId, code])
-  activities Activity[]
+
 }
 
 // 4. HORARIOS FIJOS
@@ -125,7 +127,12 @@ model Enrollment {
   subjectId  Int
   subject    Subject        @relation(fields: [subjectId], references: [id])
 
-   attendance Attendance[]
+
+  parallelId Int?             // (Opcional por ahora para no romper datos viejos)
+  parallel   Parallel?        @relation(fields: [parallelId], references: [id])
+
+
+  attendance Attendance[]
 
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt

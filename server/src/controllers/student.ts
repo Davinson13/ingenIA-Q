@@ -7,7 +7,6 @@ interface RequestWithUser extends Request {
   user?: any;
 }
 
-// PESOS ESTÁTICOS (Para cálculo de notas)
 const WEIGHTS: any = {
   'INDIVIDUAL': 7,
   'GRUPAL': 5,
@@ -16,28 +15,11 @@ const WEIGHTS: any = {
 };
 
 // ---------------------------------------------------------
-// 1. ESTADÍSTICAS DEL ESTUDIANTE (DASHBOARD)
+// 1. ESTADÍSTICAS (DASHBOARD)
 // ---------------------------------------------------------
-// 1. ESTADÍSTICAS DEL ESTUDIANTE (CON LOGS DE DEPURACIÓN)
 const getStudentStats = async (req: RequestWithUser, res: Response) => {
   try {
-    // 🕵️‍♂️ DETECTIVE DE ERRORES:
-    console.log("------------------------------------------------");
-    console.log("🔍 REVISANDO TOKEN RECIBIDO:");
-    console.log(req.user);
-    // Si aquí ves "_id", es que el navegador sigue usando el token viejo.
-
-    // 1. Validación de seguridad ANTES de llamar a Prisma
-    if (!req.user || !req.user.id) {
-      console.error("❌ ERROR CRÍTICO: El token no tiene 'id'. Posiblemente es un token viejo de MongoDB.");
-      res.status(401).send("TOKEN_INVALIDO_REINICIA_SESION");
-      return;
-    }
-
     const userId = req.user.id;
-    console.log(`✅ ID válido detectado: ${userId}. Consultando base de datos...`);
-
-    // 2. Obtener datos del estudiante
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
@@ -46,19 +28,11 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
       }
     });
 
-    if (!user) {
-      console.error(`❌ El usuario con ID ${userId} no existe en la BD (¿Hiciste seed de nuevo?).`);
-      res.status(404).send("USUARIO_NO_ENCONTRADO");
+    if (!user || !user.career) {
+      res.status(404).send("USUARIO_O_CARRERA_NO_ENCONTRADO");
       return;
     }
 
-    if (!user.career) {
-      res.status(400).send("USUARIO_SIN_CARRERA");
-      return;
-    }
-
-    // ... (El resto de tus cálculos matemáticos siguen igual aquí abajo) ...
-    // 2. CÁLCULOS MATEMÁTICOS
     const approvedSubjects = user.enrollments.filter(e => e.status === 'APPROVED');
     const takingSubjects = user.enrollments.filter(e => e.status === 'TAKING');
 
@@ -77,61 +51,44 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
     if (takingSubjects.length > 0) {
       const levels = takingSubjects.map(t => t.subject.semesterLevel);
       currentSemester = levels.length > 0 ? Math.max(...levels) : 1;
-    } else if (approvedSubjects.length > 0) {
-      const levels = approvedSubjects.map(a => a.subject.semesterLevel);
-      currentSemester = levels.length > 0 ? Math.max(...levels) + 1 : 1;
     }
 
     res.send({
       fullName: user.fullName,
       careerName: user.career.name,
       stats: {
-        average: average,
+        average,
         approvedCount: approvedSubjects.length,
-        totalSubjects: totalSubjects,
+        totalSubjects,
         progress: progressPercentage,
         takingCount: takingSubjects.length,
-        currentSemester: currentSemester
+        currentSemester
       }
     });
-
   } catch (e) {
-    console.error("🔥 ERROR EN SERVER:", e);
+    console.error(e);
     res.status(500).send("ERROR_STATS");
   }
 };
 
 // ---------------------------------------------------------
-// 2. HORARIO SEMANAL (CALENDARIO)
+// 2. HORARIO SEMANAL
 // ---------------------------------------------------------
 const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
-
-    // 1. Buscar materias que el estudiante está cursando (TAKING)
     const enrollments = await prisma.enrollment.findMany({
-      where: {
-        userId: userId,
-        status: 'TAKING'
-      },
+      where: { userId, status: 'TAKING' },
       include: {
         subject: {
-          include: {
-            parallels: {
-              include: { schedules: true }
-            }
-          }
+          include: { parallels: { include: { schedules: true } } }
         }
       }
     });
 
-    // 2. Aplanar la estructura para el frontend
     let scheduleEvents: any[] = [];
-
     enrollments.forEach((enrollment) => {
-      // Asumimos que toma el primer paralelo disponible (simplificación para MVP)
       const parallel = enrollment.subject.parallels[0];
-
       if (parallel && parallel.schedules) {
         parallel.schedules.forEach(sched => {
           scheduleEvents.push({
@@ -140,14 +97,12 @@ const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
             dayOfWeek: sched.dayOfWeek,
             startTime: sched.startTime,
             endTime: sched.endTime,
-            classroom: 'Aula 101' // Dato simulado por ahora
+            classroom: 'Aula 101'
           });
         });
       }
     });
-
     res.send(scheduleEvents);
-
   } catch (e) {
     console.log(e);
     res.status(500).send("ERROR_GETTING_SCHEDULE");
@@ -155,50 +110,64 @@ const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
 };
 
 // ---------------------------------------------------------
-// 3. LISTA DE CALIFICACIONES (HISTORIAL)
+// 3. MIS CURSOS (CON AUTO-CORRECCIÓN DE DATOS VIEJOS)
 // ---------------------------------------------------------
-const getStudentGrades = async (req: RequestWithUser, res: Response) => {
+const getMyCourses = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
 
-    // Buscar todas las matrículas del estudiante
     const enrollments = await prisma.enrollment.findMany({
-      where: { userId: userId },
-      include: {
-        subject: true
-      },
-      orderBy: { subject: { semesterLevel: 'asc' } } // Ordenar por semestre
+      where: { userId: userId, status: 'TAKING' },
+      include: { subject: true, parallel: true }
     });
 
-    // Formatear para el frontend
-    const grades = enrollments.map(e => ({
-      id: e.id,
-      subjectName: e.subject.name,
-      semester: e.subject.semesterLevel,
-      status: e.status, // TAKING, APPROVED, FAILED
-      grade: e.finalGrade // Puede ser null si aún no tiene nota
+    // Usamos Promise.all para hacer consultas extra si faltan datos
+    const courses = await Promise.all(enrollments.map(async (e) => {
+      let pid = e.parallel?.id;
+      let pcode = e.parallel?.code;
+
+      // 🚑 FALLBACK: Si es un dato viejo sin paralelo, buscamos uno por defecto
+      if (!pid) {
+        const fallbackParallel = await prisma.parallel.findFirst({
+          where: { subjectId: e.subjectId }
+        });
+        if (fallbackParallel) {
+          pid = fallbackParallel.id;
+          pcode = fallbackParallel.code;
+        }
+      }
+
+      return {
+        courseId: pid || 0, // Si sigue siendo 0, el frontend debería ocultarlo
+        subjectName: e.subject.name,
+        code: pcode || "N/A",
+        level: e.subject.semesterLevel,
+        progress: 0
+      };
     }));
 
-    res.send(grades);
+    // Filtramos los que tengan ID 0 para evitar errores 400
+    res.send(courses.filter(c => c.courseId !== 0));
 
   } catch (e) {
     console.log(e);
-    res.status(500).send("ERROR_GETTING_STUDENT_GRADES");
+    res.status(500).send("ERROR_GET_COURSES");
   }
 };
 
-// 4. DETALLE DE CURSO Y ACTIVIDADES
+// ---------------------------------------------------------
+// 4. DETALLE DE CURSO (CON CONVERSIÓN SEGURA)
+// ---------------------------------------------------------
 const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
     const { courseId } = req.params;
 
-    // CORRECCIÓN PARA: parseInt error
-    const idString = String(courseId || '');
-    const parallelId = parseInt(idString, 10);
+    // 🛡️ CORRECCIÓN: Forzamos String() para evitar errores de tipo en TypeScript
+    const parallelId = parseInt(String(courseId || '0'));
 
-    if (isNaN(parallelId)) {
-      res.status(400).send("ID_CURSO_INVALIDO");
+    if (isNaN(parallelId) || parallelId === 0) {
+      res.status(400).send("ID_INVALIDO");
       return;
     }
 
@@ -210,17 +179,10 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       }
     });
 
-    // CORRECCIÓN PARA: Object is possibly 'null'
-    if (!parallel) {
-      res.status(404).send("CURSO_NO_ENCONTRADO");
-      return;
-    }
+    if (!parallel) { res.status(404).send("CURSO_NO_ENCONTRADO"); return; }
 
     const myGrades = await prisma.activityGrade.findMany({
-      where: {
-        studentId: userId,
-        activity: { parallelId: parallel.id }
-      },
+      where: { studentId: userId, activity: { parallelId: parallel.id } },
       include: { activity: true }
     });
 
@@ -231,8 +193,7 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       'FINAL': { sum: 0, count: 0, weight: 6 }
     };
 
-    const activitiesList = parallel.activities.map(act => {
-      // CORRECCIÓN PARA: Parameter 'g' implicitly has an 'any' type
+    const gradesList = parallel.activities.map(act => {
       const gradeObj = myGrades.find((g: any) => g.activityId === act.id);
       const score = gradeObj ? gradeObj.score : null;
 
@@ -256,28 +217,45 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       const data = typeAccumulated[type];
       if (data.count > 0) {
         const avg20 = data.sum / data.count;
-        const points = (avg20 * data.weight) / 20;
-        finalTotal += points;
+        finalTotal += (avg20 * data.weight) / 20;
       }
     });
+
+    const agenda = await prisma.event.findMany({
+      where: { parallelId: parallel.id },
+      orderBy: { date: 'asc' }
+    });
+
+    const enrollment = await prisma.enrollment.findFirst({
+      where: { userId, subjectId: parallel.subjectId }
+    });
+
+    let attendance: any[] = [];
+    if (enrollment) {
+      attendance = await prisma.attendance.findMany({
+        where: { enrollmentId: enrollment.id },
+        orderBy: { date: 'desc' }
+      });
+    }
 
     res.send({
       subjectName: parallel.subject.name,
       parallelCode: parallel.code,
-      activities: activitiesList,
-      finalTotal: parseFloat(finalTotal.toFixed(2))
+      grades: gradesList,
+      finalTotal: parseFloat(finalTotal.toFixed(2)),
+      agenda: agenda,
+      attendance: attendance
     });
 
   } catch (e) {
     console.log(e);
-    res.status(500).send("ERROR_GETTING_STUDENT_COURSE_DETAILS");
+    res.status(500).send("ERROR_GETTING_DETAILS");
   }
 };
 
-// EXPORTAMOS LAS 4 FUNCIONES
 export {
   getStudentStats,
   getWeeklySchedule,
-  getStudentGrades,
+  getMyCourses,
   getStudentCourseDetails
 };
