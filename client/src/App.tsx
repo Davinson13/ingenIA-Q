@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'; // Quitamos BrowserR
 import { LoginPage } from './pages/auth/LoginPage';
 import { MainLayout } from './components/shared/MainLayout';
 // CORRECCIÓN: Importar desde la carpeta shared, no auth
-import { ProtectedRoute } from './components/shared/ProtectedRoute'; 
+import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
 // Páginas Estudiante
 import { StudentDashboard } from './pages/student/StudentDashboard';
@@ -16,6 +16,9 @@ import { TeacherCoursesPage } from './pages/teacher/TeacherCoursesPage';
 import { TeacherGradesPage } from './pages/teacher/TeacherGradesPage';
 import { TeacherAttendancePage } from './pages/teacher/TeacherAttendancePage';
 import { TeacherCalendarPage } from './pages/teacher/TeacherCalendarPage';
+import { TeacherCourseDetail } from './pages/teacher/TeacherCourseDetail';
+import { TeacherActivityGradePage } from './pages/teacher/TeacherActivityGradePage';
+
 // Puedes importar las otras páginas cuando las crees realmente
 
 function App() {
@@ -45,17 +48,15 @@ function App() {
         <Route path="/teacher" element={<MainLayout />}>
           {/* Redirigir /teacher directo al dashboard */}
           <Route index element={<Navigate to="/teacher/dashboard" replace />} />
-
+          <Route path="course/:id" element={<TeacherCourseDetail />} />
           <Route path="dashboard" element={<TeacherDashboard />} />
           <Route path="courses" element={<TeacherCoursesPage />} />
           <Route path="activities" element={<div className="p-10">Actividades (En construcción)</div>} />
           <Route path="grades" element={<TeacherGradesPage />} />
-          {/* Reutilizamos el calendario de estudiantes por ahora */}
-          
+          <Route path="course/:id" element={<TeacherCourseDetail />} />
           <Route path="attendance" element={<TeacherAttendancePage />} />
           <Route path="calendar" element={<TeacherCalendarPage />} />
-
-
+          <Route path="course/:courseId/activity/:activityId/grade" element={<TeacherActivityGradePage />} />
         </Route>
       </Route>
 

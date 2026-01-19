@@ -6,11 +6,11 @@ export const TeacherDashboard = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      
+
       {/* 1. BIENVENIDA DOCENTE (Tono Indigo) */}
       <div className="bg-gradient-to-r from-indigo-900 to-violet-800 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full mix-blend-overlay filter blur-3xl opacity-10 -translate-y-1/2 translate-x-1/2"></div>
-        
+
         <div className="relative z-10">
           <h1 className="text-3xl font-bold">
             Bienvenido, <span className="text-indigo-200">{user?.fullName}</span>
@@ -23,7 +23,7 @@ export const TeacherDashboard = () => {
 
       {/* 2. RESUMEN RÁPIDO */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        
+
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
           <div className="p-4 bg-indigo-50 text-indigo-600 rounded-xl">
             <BookOpen size={24} />
@@ -70,10 +70,10 @@ export const TeacherDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Aquí pondremos la lista de cursos reciente y el calendario mini más adelante */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-64 flex items-center justify-center text-slate-400">
-            Próximamente: Lista de Cursos Recientes
+          Próximamente: Lista de Cursos Recientes
         </div>
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-64 flex items-center justify-center text-slate-400">
-            Próximamente: Actividades de Hoy
+          Próximamente: Actividades de Hoy
         </div>
       </div>
 
