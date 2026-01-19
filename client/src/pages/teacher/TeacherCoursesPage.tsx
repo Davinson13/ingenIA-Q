@@ -1,27 +1,19 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom'; // Para navegar al detalle
 import api from '../../api/axios';
-import { Users, BookOpen, Search, ChevronDown, ChevronUp, Mail } from 'lucide-react';
+import { BookOpen, Users, ArrowRight, GraduationCap } from 'lucide-react';
 
-interface Student {
-  id: number;
-  fullName: string;
-  email: string;
-  avatar: string;
-}
-
-interface Course {
+interface CourseCard {
   id: number;
   subjectName: string;
   code: string;
-  period: string;
-  studentCount: number;
-  students: Student[];
+  // level: string; // Si tu backend lo envía, agrégalo
 }
 
 export const TeacherCoursesPage = () => {
-  const [courses, setCourses] = useState<Course[]>([]);
+  const navigate = useNavigate();
+  const [courses, setCourses] = useState<CourseCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedCourse, setExpandedCourse] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -29,7 +21,7 @@ export const TeacherCoursesPage = () => {
         const res = await api.get('/teacher/courses');
         setCourses(res.data);
       } catch (error) {
-        console.error("Error cargando cursos", error);
+        console.error(error);
       } finally {
         setLoading(false);
       }
@@ -37,111 +29,63 @@ export const TeacherCoursesPage = () => {
     fetchCourses();
   }, []);
 
-  const toggleExpand = (id: number) => {
-    setExpandedCourse(expandedCourse === id ? null : id);
-  };
-
-  if (loading) return <div className="p-10 text-center text-slate-500">Cargando tus cursos...</div>;
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
+    <div className="space-y-8 animate-in fade-in duration-500">
       
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Mis Cursos</h1>
-          <p className="text-slate-500">Gestión de asignaturas y listado de estudiantes</p>
-        </div>
+      {/* HEADER */}
+      <div>
+        <h1 className="text-3xl font-bold text-slate-800 flex items-center gap-2">
+          <GraduationCap className="text-indigo-600" /> Mis Cursos
+        </h1>
+        <p className="text-slate-500">Selecciona una materia para gestionar actividades, estudiantes y notas.</p>
       </div>
 
-      {courses.length === 0 ? (
-        <div className="bg-white p-8 rounded-xl shadow-sm text-center border border-slate-200">
-           <BookOpen className="mx-auto h-12 w-12 text-slate-300 mb-3" />
-           <p className="text-slate-500">No tienes cursos asignados para este periodo.</p>
-        </div>
+      {/* GRID DE TARJETAS */}
+      {loading ? (
+        <div className="text-center py-20 text-slate-400">Cargando cursos...</div>
       ) : (
-        <div className="grid gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {courses.map((course) => (
-            <div key={course.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all hover:shadow-md">
-              
-              {/* CABECERA DEL CURSO */}
-              <div 
-                onClick={() => toggleExpand(course.id)}
-                className="p-6 cursor-pointer flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xl">
-                    {course.code}
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-800">{course.subjectName}</h3>
-                    <p className="text-sm text-slate-500">Periodo {course.period}</p>
-                  </div>
+            <div 
+              key={course.id}
+              onClick={() => navigate(`/teacher/course/${course.id}`)} // <--- ESTO ES CLAVE: Navega al detalle
+              className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                  <BookOpen size={24} />
                 </div>
-
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2 text-slate-600 bg-slate-100 px-3 py-1 rounded-full text-sm">
-                    <Users size={16} />
-                    <span className="font-semibold">{course.studentCount}</span> Estudiantes
-                  </div>
-                  {expandedCourse === course.id ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
-                </div>
+                <span className="bg-slate-100 text-slate-600 text-xs font-bold px-2 py-1 rounded uppercase">
+                  Paralelo {course.code}
+                </span>
               </div>
 
-              {/* LISTA DE ESTUDIANTES (Desplegable) */}
-              {expandedCourse === course.id && (
-                <div className="border-t border-slate-100 bg-slate-50/50 p-6 animate-in slide-in-from-top-2">
-                  
-                  {/* Buscador simple */}
-                  <div className="mb-4 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="text" 
-                      placeholder="Buscar estudiante..." 
-                      className="w-full pl-10 p-2 rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-500"
-                    />
-                  </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-indigo-600 transition-colors">
+                {course.subjectName}
+              </h3>
+              
+              <p className="text-slate-400 text-sm mb-6">
+                Gestión académica del periodo actual.
+              </p>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="text-xs font-bold text-slate-500 uppercase border-b border-slate-200">
-                          <th className="py-3 px-4">Estudiante</th>
-                          <th className="py-3 px-4">Correo</th>
-                          <th className="py-3 px-4 text-center">Estado</th>
-                          <th className="py-3 px-4 text-right">Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {course.students.map((student) => (
-                          <tr key={student.id} className="hover:bg-white transition-colors">
-                            <td className="py-3 px-4 flex items-center gap-3">
-                              <img src={student.avatar} alt="Avatar" className="w-8 h-8 rounded-full" />
-                              <span className="font-medium text-slate-700">{student.fullName}</span>
-                            </td>
-                            <td className="py-3 px-4 text-slate-500 text-sm">{student.email}</td>
-                            <td className="py-3 px-4 text-center">
-                              <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">
-                                Activo
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-right">
-                              <button className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors" title="Enviar Mensaje">
-                                <Mail size={18} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {course.students.length === 0 && (
-                      <p className="text-center text-slate-400 py-6">No hay estudiantes inscritos aún.</p>
-                    )}
-                  </div>
+              <div className="border-t border-slate-100 pt-4 flex justify-between items-center">
+                <div className="flex items-center gap-2 text-slate-500 text-sm">
+                   <Users size={16} />
+                   <span>Ingresar al curso</span> 
                 </div>
-              )}
+                <div className="text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 duration-300">
+                   <ArrowRight size={20} />
+                </div>
+              </div>
             </div>
           ))}
         </div>
+      )}
+      
+      {courses.length === 0 && !loading && (
+          <div className="text-center py-20 text-slate-400">
+              No tienes cursos asignados todavía.
+          </div>
       )}
     </div>
   );

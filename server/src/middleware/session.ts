@@ -4,7 +4,7 @@ import { JwtPayload } from "jsonwebtoken";
 
 // Extendemos la definición de Request
 interface RequestExt extends Request {
-  user?: any; // Lo dejamos en 'any' para evitar conflictos de tipado por ahora
+  user?: any;
 }
 
 const checkJwt = async (req: RequestExt, res: Response, next: NextFunction) => {

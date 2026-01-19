@@ -1,6 +1,6 @@
 import bcryptjs from "bcryptjs";
 
-// 1. Encriptar contraseña (ej: "123456" -> "adjh12387asdh...")
+// 1. Encriptar contraseña 
 const encrypt = async (passwordPlain: string) => {
   const hash = await bcryptjs.hash(passwordPlain, 10);
   return hash;

@@ -106,7 +106,7 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
 // ---------------------------------------------------------
 const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id; // CORREGIDO: .id
+    const userId = req.user.id;
 
     // 1. Buscar materias que el estudiante está cursando (TAKING)
     const enrollments = await prisma.enrollment.findMany({
@@ -137,7 +137,7 @@ const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
           scheduleEvents.push({
             id: sched.id,
             subjectName: enrollment.subject.name,
-            dayOfWeek: sched.dayOfWeek, // 1=Lunes
+            dayOfWeek: sched.dayOfWeek,
             startTime: sched.startTime,
             endTime: sched.endTime,
             classroom: 'Aula 101' // Dato simulado por ahora

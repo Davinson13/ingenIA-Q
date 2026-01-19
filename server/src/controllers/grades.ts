@@ -17,7 +17,7 @@ const calculateWeightedTotal = (activities: any[], grades: any[]) => {
   const scoresByType: any = { 'INDIVIDUAL': [], 'GRUPAL': [], 'MEDIO': [], 'FINAL': [] };
 
   activities.forEach(act => {
-    // CORRECCIÓN: Tipado explícito para 'g'
+    // Tipado explícito para 'g'
     const gradeObj = grades.find((g: any) => g.activityId === act.id);
     if (gradeObj && scoresByType[act.type]) {
         scoresByType[act.type].push(gradeObj.score);
@@ -42,7 +42,7 @@ const getGradeMatrix = async (req: RequestWithUser, res: Response) => {
   try {
     const { courseId } = req.params;
 
-    // CORRECCIÓN: Forzamos a String antes de parsear para evitar el error de TypeScript
+    // Forzamos a String antes de parsear para evitar el error de TypeScript
     const idString = String(courseId || '');
     const parallelId = parseInt(idString, 10);
 
@@ -81,7 +81,7 @@ const getGradeMatrix = async (req: RequestWithUser, res: Response) => {
       const studentGrades: any = {};
       
       activities.forEach(act => {
-        // CORRECCIÓN: Definimos 'g' como any para evitar error de tipado
+        // Definimos 'g' como any para evitar error de tipado
         const gradeObj = student.activityGrades.find((g: any) => g.activityId === act.id);
         studentGrades[act.id] = gradeObj ? gradeObj.score : 0;
       });
@@ -111,10 +111,10 @@ const updateActivityGrade = async (req: RequestWithUser, res: Response) => {
   try {
     const { activityId, studentId, score } = req.body;
     
-    // CORRECCIÓN: Aseguramos que score sea número
+    // Aseguramos que score sea número
     const scoreNum = parseFloat(score);
 
-    // CORRECCIÓN: Forzamos IDs a enteros
+    // Forzamos IDs a enteros
     const actId = parseInt(String(activityId), 10);
     const studId = parseInt(String(studentId), 10);
 

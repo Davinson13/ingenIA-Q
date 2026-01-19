@@ -10,7 +10,6 @@ interface RequestWithUser extends Request {
 
 const getMyCareerPlan = async (req: RequestWithUser, res: Response) => {
   try {
-    // 1. CORRECCIÓN: Usamos .id (PostgreSQL) en lugar de ._id
     const userId = req.user.id; 
 
     // Validación de seguridad extra
