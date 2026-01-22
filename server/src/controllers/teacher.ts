@@ -106,7 +106,7 @@ const getCourseGrades = async (req: RequestWithUser, res: Response) => {
     try {
         // 1. Obtenemos el parámetro y lo forzamos a String
         const { courseId } = req.params;
-        const idString = String(courseId); 
+        const idString = String(courseId);
 
         // 2. Parseamos usando base 10 explícitamente
         const idParseado = parseInt(idString, 10);
@@ -160,6 +160,104 @@ const getCourseGrades = async (req: RequestWithUser, res: Response) => {
     }
 };
 
+// 🟢 4. OBTENER DETALLE DE ACTIVIDAD Y ENTREGAS (CORREGIDO: Lógica de búsqueda de estudiantes)
+const getActivityGrades = async (req: RequestWithUser, res: Response) => {
+    try {
+        const { activityId } = req.params;
+        const eventId = parseInt(String(activityId));
+
+        // 1. Buscamos el evento
+        const event = await prisma.event.findUnique({ where: { id: eventId } });
+        if (!event) { res.status(404).send("ACTIVIDAD_NO_ENCONTRADA"); return; }
+
+        // 2. IMPORTANTE: Buscamos el paralelo para obtener el subjectId
+        const parallel = await prisma.parallel.findUnique({ where: { id: event.parallelId } });
+        if (!parallel) { res.status(404).send("PARALELO_NO_ENCONTRADO"); return; }
+
+        // 3. Buscamos estudiantes (Usando la lógica robusta: Por Paralelo O Por Materia)
+        const enrollments = await prisma.enrollment.findMany({
+            where: {
+                status: 'TAKING',
+                OR: [
+                    { parallelId: parallel.id }, // Matriculados directo al paralelo
+                    { subjectId: parallel.subjectId, parallelId: null } // Matriculados a la materia (Caso común)
+                ]
+            },
+            include: { user: true },
+            orderBy: { user: { fullName: 'asc' } }
+        });
+
+        // 4. Buscamos notas
+        const whereClause: any = { eventId: eventId };
+        const grades = await prisma.activityGrade.findMany({ where: whereClause });
+
+        // 5. Mapeo final
+        const roster = enrollments.map(enrollment => {
+            const submission: any = grades.find((g: any) => g.studentId === enrollment.user.id);
+
+            return {
+                studentId: enrollment.user.id,
+                fullName: enrollment.user.fullName,
+                avatar: `https://ui-avatars.com/api/?name=${enrollment.user.fullName}&background=random`,
+                score: (submission && submission.score !== null) ? submission.score : '',
+                submissionLink: submission?.submissionLink || null,
+                feedback: submission?.feedback || '',
+                submittedAt: submission?.submittedAt || null,
+                hasGrade: (submission && submission.score !== null)
+            };
+        });
+
+        res.send({
+            activity: {
+                id: event.id,
+                title: event.title,
+                description: event.description,
+                limitDate: event.date
+            },
+            students: roster
+        });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).send("ERROR_GETTING_GRADES");
+    }
+};
+
+// 🟢 5. GUARDAR NOTAS (BLINDADO)
+const saveActivityGrade = async (req: RequestWithUser, res: Response) => {
+    try {
+        const { activityId } = req.params;
+        const { studentId, score, feedback } = req.body;
+
+        const eventIdInt = parseInt(String(activityId));
+        const studentIdInt = parseInt(String(studentId));
+
+        const whereClause: any = {
+            studentId_eventId: {
+                studentId: studentIdInt,
+                eventId: eventIdInt
+            }
+        };
+
+        const createData: any = {
+            studentId: studentIdInt,
+            eventId: eventIdInt,
+            score: parseFloat(score),
+            feedback: feedback
+        };
+
+        const submission = await prisma.activityGrade.upsert({
+            where: whereClause,
+            update: {
+                score: parseFloat(score),
+                feedback: feedback
+            },
+            create: createData
+        });
+
+        res.send(submission);
+    } catch (e) { console.error(e); res.status(500).send("ERROR_SAVING_GRADE"); }
+};
 // 4. ACTUALIZAR UNA NOTA
 const updateStudentGrade = async (req: RequestWithUser, res: Response) => {
     try {
@@ -188,5 +286,7 @@ export {
     createTutoring,
     getTeacherCourses,
     getCourseGrades,
-    updateStudentGrade
+    updateStudentGrade,
+    getActivityGrades,
+    saveActivityGrade
 };

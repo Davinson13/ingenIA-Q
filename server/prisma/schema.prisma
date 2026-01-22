@@ -86,13 +86,15 @@ model Parallel {
   schedules Schedule[]
 
   events      Event[]
+  activities Activity[]
+  enrollments Enrollment[]
 
   // NOTA: He quitado la relación 'enrollments' aquí temporalmente porque
   // 'Enrollment' ahora está vinculado a 'Subject', no a 'Parallel'.
   // Más adelante crearemos una tabla 'ClassRegistration' para la toma de horarios.
 
   @@unique([periodId, subjectId, code])
-  activities Activity[]
+
 }
 
 // 4. HORARIOS FIJOS
@@ -125,7 +127,12 @@ model Enrollment {
   subjectId  Int
   subject    Subject        @relation(fields: [subjectId], references: [id])
 
-   attendance Attendance[]
+
+  parallelId Int?             // (Opcional por ahora para no romper datos viejos)
+  parallel   Parallel?        @relation(fields: [parallelId], references: [id])
+
+
+  attendance Attendance[]
 
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
@@ -186,19 +193,28 @@ model Activity {
 }
 
 model ActivityGrade {
-  id          Int      @id @default(autoincrement())
-  score       Float    // La nota que sacó (Ej: 6.5)
-  feedback    String?  // Comentario del profe
+  id             Int      @id @default(autoincrement())
+  score          Float?   
+  feedback       String? 
+  submissionLink String?  
+  submittedAt    DateTime? @default(now())
   
-  activityId  Int
-  activity    Activity @relation(fields: [activityId], references: [id])
+  // Relación antigua (Opcional ahora)
+  activityId  Int?
+  activity    Activity? @relation(fields: [activityId], references: [id])
+
+  // Relación nueva (Con Eventos)
+  eventId     Int?
+  event       Event?    @relation(fields: [eventId], references: [id])
   
   studentId   Int
-  student     User     @relation(fields: [studentId], references: [id])
+  student     User      @relation(fields: [studentId], references: [id])
   
   createdAt   DateTime @default(now())
-  
-  @@unique([activityId, studentId]) // Un estudiante solo tiene una nota por actividad
+
+  // Claves únicas para evitar duplicados
+  @@unique([studentId, eventId])
+  @@unique([activityId, studentId])
 }
 
 // 1. AGREGA ESTO AL FINAL DEL ARCHIVO
@@ -228,7 +244,9 @@ model Event {
   description String?
   date        DateTime // Fecha y hora del evento
   type        String   // INDIVIDUAL, GRUPAL, MEDIO, FINAL (Para saber a qué categoría pertenece)
-  
+
+
+  activityGrades ActivityGrade[]
   parallel    Parallel @relation(fields: [parallelId], references: [id])
   parallelId  Int
 }

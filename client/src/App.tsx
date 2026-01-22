@@ -6,9 +6,11 @@ import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
 // Páginas Estudiante
 import { StudentDashboard } from './pages/student/StudentDashboard';
-import { SubjectsPage } from './pages/student/SubjectsPage';
 import { CalendarPage } from './pages/student/CalendarPage';
 import { AiTutorPage } from './pages/student/AiTutorPage';
+import { StudentCoursesPage } from './pages/student/StudentCoursesPage'; 
+import { StudentCourseDetail } from './pages/student/StudentCourseDetail';
+
 
 // Páginas Docente
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
@@ -35,7 +37,8 @@ function App() {
       <Route element={<ProtectedRoute allowedRoles={['STUDENT']} />}>
         <Route path="/dashboard" element={<MainLayout />}>
           <Route index element={<StudentDashboard />} />
-          <Route path="subjects" element={<SubjectsPage />} />
+          <Route path="subjects" element={<StudentCoursesPage />} />
+          <Route path="course/:id" element={<StudentCourseDetail />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
         </Route>
@@ -51,12 +54,11 @@ function App() {
           <Route path="course/:id" element={<TeacherCourseDetail />} />
           <Route path="dashboard" element={<TeacherDashboard />} />
           <Route path="courses" element={<TeacherCoursesPage />} />
-          <Route path="activities" element={<div className="p-10">Actividades (En construcción)</div>} />
           <Route path="grades" element={<TeacherGradesPage />} />
           <Route path="course/:id" element={<TeacherCourseDetail />} />
           <Route path="attendance" element={<TeacherAttendancePage />} />
           <Route path="calendar" element={<TeacherCalendarPage />} />
-          <Route path="course/:courseId/activity/:activityId/grade" element={<TeacherActivityGradePage />} />
+          <Route path="/teacher/course/:courseId/activity/:activityId/grade" element={<TeacherActivityGradePage />}/>
         </Route>
       </Route>
 
