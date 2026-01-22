@@ -4,7 +4,8 @@ import {
   getStudentStats, 
   getWeeklySchedule, 
   getMyCourses,          // <--- ESTA ES NUEVA (Reemplaza a getStudentGrades)
-  getStudentCourseDetails 
+  getStudentCourseDetails,
+  submitActivity
 } from "../controllers/student";
 
 const router = Router();
@@ -20,5 +21,7 @@ router.get("/courses", checkJwt, getMyCourses);
 
 // 4. Detalle de una Materia (Notas, Agenda, Asistencia)
 router.get("/course/:courseId", checkJwt, getStudentCourseDetails);
+
+router.post("/submit", checkJwt, submitActivity);
 
 export { router };

@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { checkJwt } from "../middleware/session";
-import { getTeacherDashboard, createTutoring, getTeacherCourses, getCourseGrades, updateStudentGrade } from "../controllers/teacher";
+import { 
+    getTeacherDashboard, 
+    createTutoring, 
+    getTeacherCourses, 
+    getCourseGrades, 
+    updateStudentGrade, 
+    getActivityGrades, // Importado
+    saveActivityGrade  // Importado
+} from "../controllers/teacher";
 import { 
   getGradeMatrix,
   updateActivityGrade
@@ -8,7 +16,6 @@ import {
 
 import { getAttendance, saveAttendance } from "../controllers/attendance";
 import { getEvents, createEvent, deleteEvent } from "../controllers/calendar";
-
 
 const router = Router();
 
@@ -19,9 +26,14 @@ router.get("/courses", checkJwt, getTeacherCourses);
 router.get("/grades/:courseId", checkJwt, getCourseGrades);
 router.put("/grades", checkJwt, updateStudentGrade);
 
-// 2. AGREGAR LAS RUTAS DE CALIFICACIONES
+// 2. RUTAS DE CALIFICACIONES (Matriz General)
 router.get("/grade-matrix/:courseId", checkJwt, getGradeMatrix);
-router.post("/grade-activity", checkJwt, updateActivityGrade);
+router.post("/grade-activity", checkJwt, updateActivityGrade); // Esta es para la matriz general
+
+// 3. RUTAS PARA CALIFICAR ACTIVIDAD ESPECÍFICA (La que fallaba)
+// ⚠️ CORREGIDO: Quitamos "/teacher" del inicio
+router.get('/activity/:activityId/grades', checkJwt, getActivityGrades);
+router.post('/activity/:activityId/grade', checkJwt, saveActivityGrade);
 
 // RUTAS DE ASISTENCIA
 router.get("/attendance", checkJwt, getAttendance);

@@ -14,9 +14,7 @@ const WEIGHTS: any = {
   'FINAL': 6
 };
 
-// ---------------------------------------------------------
-// 1. ESTADÍSTICAS (DASHBOARD)
-// ---------------------------------------------------------
+// 1. ESTADÍSTICAS (DASHBOARD) - Mantengo tu código original
 const getStudentStats = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
@@ -71,9 +69,7 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// ---------------------------------------------------------
-// 2. HORARIO SEMANAL
-// ---------------------------------------------------------
+// 2. HORARIO SEMANAL - Mantengo tu código original
 const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
@@ -109,9 +105,7 @@ const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// ---------------------------------------------------------
-// 3. MIS CURSOS (CON AUTO-CORRECCIÓN DE DATOS VIEJOS)
-// ---------------------------------------------------------
+// 3. MIS CURSOS - Mantengo tu código original
 const getMyCourses = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
@@ -121,12 +115,10 @@ const getMyCourses = async (req: RequestWithUser, res: Response) => {
       include: { subject: true, parallel: true }
     });
 
-    // Usamos Promise.all para hacer consultas extra si faltan datos
     const courses = await Promise.all(enrollments.map(async (e) => {
       let pid = e.parallel?.id;
       let pcode = e.parallel?.code;
 
-      // 🚑 FALLBACK: Si es un dato viejo sin paralelo, buscamos uno por defecto
       if (!pid) {
         const fallbackParallel = await prisma.parallel.findFirst({
           where: { subjectId: e.subjectId }
@@ -138,7 +130,7 @@ const getMyCourses = async (req: RequestWithUser, res: Response) => {
       }
 
       return {
-        courseId: pid || 0, // Si sigue siendo 0, el frontend debería ocultarlo
+        courseId: pid || 0,
         subjectName: e.subject.name,
         code: pcode || "N/A",
         level: e.subject.semesterLevel,
@@ -146,7 +138,6 @@ const getMyCourses = async (req: RequestWithUser, res: Response) => {
       };
     }));
 
-    // Filtramos los que tengan ID 0 para evitar errores 400
     res.send(courses.filter(c => c.courseId !== 0));
 
   } catch (e) {
@@ -155,101 +146,152 @@ const getMyCourses = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// ---------------------------------------------------------
-// 4. DETALLE DE CURSO (CON CONVERSIÓN SEGURA)
-// ---------------------------------------------------------
+// 4. DETALLE DE CURSO (CORREGIDO: Lee Eventos Reales y busca por eventId)
 const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
     const { courseId } = req.params;
-
-    // 🛡️ CORRECCIÓN: Forzamos String() para evitar errores de tipo en TypeScript
     const parallelId = parseInt(String(courseId || '0'));
 
-    if (isNaN(parallelId) || parallelId === 0) {
-      res.status(400).send("ID_INVALIDO");
-      return;
-    }
+    if (isNaN(parallelId) || parallelId === 0) { res.status(400).send("ID_INVALIDO"); return; }
 
     const parallel = await prisma.parallel.findUnique({
       where: { id: parallelId },
       include: {
         subject: true,
-        activities: { orderBy: { id: 'asc' } }
+        activities: { orderBy: { id: 'asc' } }, // Categorías fijas
+        events: { orderBy: { date: 'desc' } }   // Tareas reales
       }
     });
 
     if (!parallel) { res.status(404).send("CURSO_NO_ENCONTRADO"); return; }
 
+    // Traemos TODAS las notas del estudiante
     const myGrades = await prisma.activityGrade.findMany({
-      where: { studentId: userId, activity: { parallelId: parallel.id } },
-      include: { activity: true }
+      where: { studentId: userId }
     });
 
-    const typeAccumulated: any = {
-      'INDIVIDUAL': { sum: 0, count: 0, weight: 7 },
-      'GRUPAL': { sum: 0, count: 0, weight: 5 },
-      'MEDIO': { sum: 0, count: 0, weight: 2 },
-      'FINAL': { sum: 0, count: 0, weight: 6 }
-    };
-
-    const gradesList = parallel.activities.map(act => {
-      const gradeObj = myGrades.find((g: any) => g.activityId === act.id);
-      const score = gradeObj ? gradeObj.score : null;
-
-      if (score !== null && typeAccumulated[act.type]) {
-        typeAccumulated[act.type].sum += score;
-        typeAccumulated[act.type].count += 1;
-      }
+    // 1. LISTA DE TAREAS REALES (Basada en Eventos de Agenda)
+    const activitiesList = parallel.events.map(evt => {
+      // 👇 BUSCAMOS LA ENTREGA POR eventId
+      const submissionObj: any = myGrades.find((g: any) => g.eventId === evt.id);
 
       return {
-        id: act.id,
-        name: act.name,
-        type: act.type,
-        maxScore: 20,
-        weight: WEIGHTS[act.type],
-        myScore: score
+        id: evt.id,
+        name: evt.title,
+        type: evt.type,
+        description: evt.description,
+        limitDate: evt.date,
+        myScore: submissionObj ? submissionObj.score : null,
+        submissionLink: submissionObj?.submissionLink || null
       };
     });
 
-    let finalTotal = 0;
-    Object.keys(typeAccumulated).forEach(type => {
-      const data = typeAccumulated[type];
-      if (data.count > 0) {
-        const avg20 = data.sum / data.count;
-        finalTotal += (avg20 * data.weight) / 20;
+    // 2. PROMEDIOS (Basado en Categorías Fijas)
+    const typeAccumulated: any = {
+      'INDIVIDUAL': { sum: 0, count: 0, weight: 7, label: "Gestión Individual" },
+      'GRUPAL': { sum: 0, count: 0, weight: 5, label: "Gestión Grupal" },
+      'MEDIO': { sum: 0, count: 0, weight: 2, label: "Examen Medio Semestre" },
+      'FINAL': { sum: 0, count: 0, weight: 6, label: "Examen Final" }
+    };
+
+    // Para los promedios, usamos SOLO las que tienen activityId
+    parallel.activities.forEach(cat => {
+      const gradeObj: any = myGrades.find((g: any) => g.activityId === cat.id);
+      if (gradeObj && gradeObj.score !== null && typeAccumulated[cat.type]) {
+        typeAccumulated[cat.type].sum += gradeObj.score;
+        typeAccumulated[cat.type].count += 1;
       }
     });
 
-    const agenda = await prisma.event.findMany({
-      where: { parallelId: parallel.id },
-      orderBy: { date: 'asc' }
+    let finalTotal = 0;
+    const scoreSummary = Object.keys(typeAccumulated).map(key => {
+      const data = typeAccumulated[key];
+      let average = 0;
+      let weightedScore = 0;
+
+      if (data.count > 0) {
+        average = parseFloat((data.sum / data.count).toFixed(2));
+        weightedScore = (average * data.weight) / 20;
+      }
+      finalTotal += weightedScore;
+
+      return {
+        category: key,
+        label: data.label,
+        weight: data.weight,
+        average: average,
+        weightedScore: parseFloat(weightedScore.toFixed(2))
+      };
     });
 
-    const enrollment = await prisma.enrollment.findFirst({
-      where: { userId, subjectId: parallel.subjectId }
-    });
+    const enrollment = await prisma.enrollment.findFirst({ where: { userId, subjectId: parallel.subjectId } });
 
     let attendance: any[] = [];
     if (enrollment) {
-      attendance = await prisma.attendance.findMany({
-        where: { enrollmentId: enrollment.id },
-        orderBy: { date: 'desc' }
-      });
+      attendance = await prisma.attendance.findMany({ where: { enrollmentId: enrollment.id }, orderBy: { date: 'desc' } });
     }
 
     res.send({
       subjectName: parallel.subject.name,
       parallelCode: parallel.code,
-      grades: gradesList,
+      activities: activitiesList,
+      scoreSummary: scoreSummary,
       finalTotal: parseFloat(finalTotal.toFixed(2)),
-      agenda: agenda,
+      agenda: parallel.events,
       attendance: attendance
     });
 
-  } catch (e) {
-    console.log(e);
-    res.status(500).send("ERROR_GETTING_DETAILS");
+  } catch (e) { console.log(e); res.status(500).send("ERROR_GETTING_DETAILS"); }
+};
+
+// 5. ENVIAR TAREA (Versión Debug)
+const submitActivity = async (req: RequestWithUser, res: Response) => {
+  try {
+    const userId = req.user.id;
+    const { activityId, link } = req.body;
+
+    console.log("📥 Intentando entregar:", { userId, activityId, link });
+
+    if (!link) { res.status(400).send("LINK_REQUERIDO"); return; }
+
+    const eventIdInt = parseInt(activityId);
+
+    // Configuración con ANY para evitar bloqueos de TypeScript
+    const whereClause: any = {
+      studentId_eventId: {
+        studentId: userId,
+        eventId: eventIdInt
+      }
+    };
+
+    const createData: any = {
+      studentId: userId,
+      eventId: eventIdInt,
+      submissionLink: link,
+      score: undefined
+    };
+
+    const updateData: any = {
+      submissionLink: link
+    };
+
+    console.log("🔄 Ejecutando Upsert en Prisma...");
+
+    const submission = await prisma.activityGrade.upsert({
+      where: whereClause,
+      update: updateData,
+      create: createData
+    });
+
+    console.log("✅ Entrega exitosa:", submission);
+    res.send(submission);
+
+  } catch (e: any) {
+    // ESTO ES LO QUE NECESITAMOS VER SI FALLA
+    console.error("❌ ERROR CRÍTICO EN PRISMA:", e.message);
+    console.error(e);
+    res.status(500).send("ERROR_SUBMITTING_ACTIVITY");
   }
 };
 
@@ -257,5 +299,6 @@ export {
   getStudentStats,
   getWeeklySchedule,
   getMyCourses,
-  getStudentCourseDetails
+  getStudentCourseDetails,
+  submitActivity
 };

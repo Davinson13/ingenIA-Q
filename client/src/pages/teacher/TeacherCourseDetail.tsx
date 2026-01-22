@@ -49,6 +49,16 @@ interface ApiAttendanceResponse {
     status?: string;
 }
 
+// 🔧 FIX: Función para obtener la fecha local "Hoy" (YYYY-MM-DD)
+// Evita que new Date().toISOString() te devuelva mañana si es de noche en Ecuador
+const getTodayLocalString = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const TeacherCourseDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -67,7 +77,10 @@ export const TeacherCourseDetail = () => {
     // Formularios
     const [showAddForm, setShowAddForm] = useState(false);
     const [newActivity, setNewActivity] = useState({ title: '', description: '', date: '', time: '', type: 'INDIVIDUAL' });
-    const [attendanceDate, setAttendanceDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    
+    // 🔧 FIX: Inicializamos con la fecha local correcta
+    const [attendanceDate, setAttendanceDate] = useState<string>(getTodayLocalString());
+    
     const [saving, setSaving] = useState(false);
 
     // --- CARGA INICIAL ---
@@ -198,7 +211,6 @@ export const TeacherCourseDetail = () => {
                 ].map(tab => (
                     <button
                         key={tab.id}
-                        // AQUÍ EL CAMBIO CLAVE: Casteamos el string al tipo TabType
                         onClick={() => setActiveTab(tab.id as TabType)}
                         className={`px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === tab.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
                     >
