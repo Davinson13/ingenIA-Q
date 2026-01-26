@@ -6,8 +6,9 @@ import {
     getTeacherCourses, 
     getCourseGrades, 
     updateStudentGrade, 
-    getActivityGrades, // Importado
-    saveActivityGrade  // Importado
+    getActivityGrades,
+    saveActivityGrade, 
+    getCourseGradeMatrix
 } from "../controllers/teacher";
 import { 
   getGradeMatrix,
