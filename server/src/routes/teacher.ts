@@ -1,48 +1,72 @@
 import { Router } from "express";
 import { checkJwt } from "../middleware/session";
-import { 
-    getTeacherDashboard, 
-    createTutoring, 
-    getTeacherCourses, 
-    getCourseGrades, 
-    updateStudentGrade, 
-    getActivityGrades,
-    saveActivityGrade, 
-    getCourseGradeMatrix
-} from "../controllers/teacher";
-import { 
-  getGradeMatrix,
-  updateActivityGrade
-} from "../controllers/grades";
 
-import { getAttendance, saveAttendance } from "../controllers/attendance";
-import { getEvents, createEvent, deleteEvent } from "../controllers/calendar";
+// 1. IMPORTAMOS LAS FUNCIONES DEL CONTROLADOR QUE ARREGLAMOS (teacher.ts)
+import {
+  getTeacherDashboard,
+  createTutoring,
+  getTutorings,
+  getTeacherCourses,
+  getCourseGrades,        // Info cabecera del curso
+  getCourseGradeMatrix,   // 👈 ESTA ES LA QUE ARREGLAMOS (Notas + Asistencia)
+  getActivityGrades,      // Ver notas de una actividad específica
+  saveActivityGrade,      // Guardar nota
+  getDailyAttendance,     // Asistencia (lectura)
+  saveDailyAttendance,    // Asistencia (guardado con fix de fecha)
+  updateStudentGrade      // Actualizar nota final (si se usa)
+} from "../controllers/teacher";
+
+// 2. IMPORTAMOS LAS FUNCIONES DE CALENDARIO (calendar.ts)
+// Importa las nuevas funciones de calendar.ts
+import {
+  getMonthAgenda,
+  createPersonalEvent,
+  deletePersonalEvent,
+  getEvents,      // 👈 Asegúrate de importar esto
+  createEvent,     // 👈 Y esto
+  deleteEvent
+} from "../controllers/calendar";
 
 const router = Router();
 
-// Rutas protegidas para docentes
-router.get("/dashboard", checkJwt, getTeacherDashboard);
-router.post("/tutoring", checkJwt, createTutoring);
-router.get("/courses", checkJwt, getTeacherCourses);
-router.get("/grades/:courseId", checkJwt, getCourseGrades);
-router.put("/grades", checkJwt, updateStudentGrade);
+// Middleware de seguridad: Todas las rutas requieren login
+router.use(checkJwt);
 
-// 2. RUTAS DE CALIFICACIONES (Matriz General)
-router.get("/grade-matrix/:courseId", checkJwt, getGradeMatrix);
-router.post("/grade-activity", checkJwt, updateActivityGrade); // Esta es para la matriz general
+// --- RUTAS DASHBOARD Y CURSOS ---
+router.get("/dashboard", getTeacherDashboard);
+router.post("/tutoring", createTutoring);
+router.get("/tutorings", getTutorings);
+router.get("/courses", getTeacherCourses);
 
-// 3. RUTAS PARA CALIFICAR ACTIVIDAD ESPECÍFICA (La que fallaba)
-// ⚠️ CORREGIDO: Quitamos "/teacher" del inicio
-router.get('/activity/:activityId/grades', checkJwt, getActivityGrades);
-router.post('/activity/:activityId/grade', checkJwt, saveActivityGrade);
+// --- RUTAS DE CALIFICACIONES (MATRIZ GENERAL) ---
+// Esta obtiene el nombre del curso para el header
+router.get("/grades/:courseId", getCourseGrades);
 
-// RUTAS DE ASISTENCIA
-router.get("/attendance", checkJwt, getAttendance);
-router.post("/attendance", checkJwt, saveAttendance);
+// 🔥 ESTA ES LA CLAVE: Debe apuntar a getCourseGradeMatrix
+router.get("/grade-matrix/:courseId", getCourseGradeMatrix);
 
-// RUTAS DE AGENDA
-router.get("/calendar", checkJwt, getEvents);
-router.post("/calendar", checkJwt, createEvent);
-router.delete("/calendar/:id", checkJwt, deleteEvent);
+// --- RUTAS PARA ACTIVIDAD ESPECÍFICA ---
+// Ver lista de estudiantes de una tarea
+router.get('/activity/:activityId', getActivityGrades); // Nota: quité el /grades extra para simplificar
+// Calificar a un estudiante en esa tarea
+router.post('/activity/:activityId/grade', saveActivityGrade);
+
+// --- RUTAS DE ASISTENCIA ---
+router.get("/attendance", getDailyAttendance);
+router.post("/attendance", saveDailyAttendance);
+
+// --- RUTAS DE AGENDA / EVENTOS ---
+// Reemplaza las anteriores de calendar por estas:
+router.get("/calendar", getMonthAgenda); // Obtener todo el mes
+router.post("/calendar/personal", createPersonalEvent); // Crear extracurricular
+router.delete("/calendar/personal/:id", deletePersonalEvent); // Borrar extracurricular
+
+// 2. Eventos Académicos (Lo que usa "Mis Cursos")
+router.get("/events", getEvents);        // 👈 NUEVA RUTA para listar actividades del curso
+router.post("/events", createEvent);     // 👈 NUEVA RUTA para crear tarea/examen
+router.delete("/events/:id", deleteEvent); // (Si tienes deleteEvent impórtalo también)
+
+// --- EXTRA ---
+router.put("/grades", updateStudentGrade);
 
 export { router };

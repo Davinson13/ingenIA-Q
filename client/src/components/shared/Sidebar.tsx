@@ -7,6 +7,7 @@ import {
   Bot,
   LogOut,
   X,
+  Users, // 👈 AGREGADO: Ícono para Tutorías
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -37,11 +38,12 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Tutor IA', path: '/dashboard/ai-tutor', icon: Bot, highlight: true },
   ];
 
-  // MENÚ DOCENTE
+  // MENÚ DOCENTE (ACTUALIZADO)
   const teacherMenus: MenuItem[] = [
     { label: 'Panel Docente', path: '/teacher/dashboard', icon: LayoutDashboard },
     { label: 'Mis Cursos', path: '/teacher/courses', icon: BookOpen },
     { label: 'Mi Agenda', path: '/teacher/calendar', icon: CalendarDays },
+    { label: 'Tutorías', path: '/teacher/tutorings', icon: Users }, // 👈 NUEVA OPCIÓN
   ];
 
   const menus = isTeacher ? teacherMenus : studentMenus;

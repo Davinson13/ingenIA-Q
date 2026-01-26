@@ -39,11 +39,21 @@ interface StudentAttendance {
     status: 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED' | null;
 }
 
+interface GradeBreakdown {
+    INDIVIDUAL: number;
+    GRUPAL: number;
+    MEDIO: number;
+    FINAL: number;
+}
+
+// Lo que usamos en el estado
 interface StudentGradeRow {
     studentId: number;
     fullName: string;
     avatar: string;
     finalTotal: number;
+    attendancePct: number;
+    breakdown: GradeBreakdown;
 }
 
 interface ApiGradeStudent {
@@ -52,7 +62,7 @@ interface ApiGradeStudent {
     avatar: string;
     finalTotal: number;
     attendancePct: number;
-    // Si usas breakdown, agrégalo aquí también
+    breakdown: GradeBreakdown;
 }
 
 // Lo que devuelve el backend en /attendance
@@ -63,6 +73,8 @@ interface ApiAttendanceRecord {
     avatar?: string;
     status?: string;
 }
+
+
 
 // Fecha local YYYY-MM-DD para el input type="date"
 const getTodayLocalString = () => {
@@ -114,32 +126,47 @@ export const TeacherCourseDetail = () => {
         loadCourseInfo();
     }, [id]);
 
-    // --- 2. FUNCIÓN PARA CARGAR NOTAS ---
+    // --- 2. FUNCIÓN FETCH GRADES (ACTUALIZADA) ---
     const fetchGrades = useCallback(async () => {
         if (!id) return;
         try {
             const res = await api.get(`/teacher/grade-matrix/${id}`);
             const studentsData = res.data.students || [];
 
-            // 🔥 CORRECCIÓN: Usamos ApiGradeStudent en lugar de 'any'
             const processedStudents: StudentGradeRow[] = studentsData.map((s: ApiGradeStudent) => ({
                 studentId: s.studentId,
                 fullName: s.fullName,
                 avatar: s.avatar,
                 finalTotal: s.finalTotal || 0,
+                attendancePct: s.attendancePct || 100,
+                // Mapeamos el desglose, poniendo 0 si falta algún dato
+                breakdown: s.breakdown || { INDIVIDUAL: 0, GRUPAL: 0, MEDIO: 0, FINAL: 0 }
             }));
 
             setGradeMatrix(processedStudents);
 
-            // Calcular Estadísticas
+            // 🔥 CÁLCULO DE ESTADÍSTICAS (Cards Superiores)
+            // Regla: Si tiene menos de 60% de asistencia, es REPROBADO directo.
             const totalStudents = processedStudents.length;
+
             if (totalStudents > 0) {
-                const approved = processedStudents.filter((s) => s.finalTotal >= 13.5).length;
-                const suspended = processedStudents.filter((s) => s.finalTotal >= 9.17 && s.finalTotal < 13.5).length;
-                const failed = processedStudents.filter((s) => s.finalTotal < 9.17).length;
+                let approved = 0;
+                let suspended = 0;
+                let failed = 0;
 
-                const avg = res.data.courseAverage || (processedStudents.reduce((acc, s) => acc + s.finalTotal, 0) / totalStudents);
+                processedStudents.forEach(s => {
+                    if (s.attendancePct < 60) {
+                        failed++; // Reprobado por faltas
+                    } else if (s.finalTotal >= 14) {
+                        approved++;
+                    } else if (s.finalTotal >= 9) {
+                        suspended++;
+                    } else {
+                        failed++; // Reprobado por nota
+                    }
+                });
 
+                const avg = res.data.courseAverage || 0;
                 setStats({ approved, suspended, failed, avg });
             }
         } catch (error) { console.error("Error cargando notas", error); }
@@ -150,7 +177,7 @@ export const TeacherCourseDetail = () => {
         if (!id) return;
 
         if (activeTab === 'ACTIVITIES') {
-            api.get(`/teacher/calendar?courseId=${id}`)
+            api.get(`/teacher/events?courseId=${id}`) // 👈 Ruta específica
                 .then(res => setActivities(Array.isArray(res.data) ? res.data : []))
                 .catch(err => console.error("Error cargando actividades", err));
         }
@@ -189,10 +216,10 @@ export const TeacherCourseDetail = () => {
                 parallelId: id
             };
 
-            await api.post('/teacher/calendar', payload);
+            await api.post('/teacher/events', payload); // 👈 Ruta específica
 
             // Recargar la lista inmediatamente
-            const res = await api.get(`/teacher/calendar?courseId=${id}`);
+            const res = await api.get(`/teacher/events?courseId=${id}`);
             setActivities(res.data);
 
             setShowAddForm(false);
@@ -218,7 +245,7 @@ export const TeacherCourseDetail = () => {
     const handleDeleteActivity = async (activityId: number) => {
         if (!confirm("¿Borrar actividad? Se eliminarán las notas asociadas.")) return;
         try {
-            await api.delete(`/teacher/calendar/${activityId}`);
+            await api.delete(`/teacher/events/${activityId}`); // 👈 Ruta específica
             setActivities(prev => prev.filter(a => a.id !== activityId));
         } catch (error) { console.error(error); }
     };
@@ -489,12 +516,14 @@ export const TeacherCourseDetail = () => {
                 </div>
             )}
 
-            {/* 3. SECCIÓN: CALIFICACIONES */}
+            {/* 3. CALIFICACIONES */}
             {activeTab === 'GRADES' && (
-                <div className="space-y-6 max-w-5xl mx-auto">
+                <div className="space-y-6 max-w-6xl mx-auto"> {/* Hice más ancho el contenedor */}
+
+                    {/* TARJETAS DE RESUMEN (STATS) */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                            <span className="text-xs font-bold text-slate-400 uppercase">Promedio General</span>
+                            <span className="text-xs font-bold text-slate-400 uppercase">Promedio Curso</span>
                             <div className="text-2xl font-bold text-slate-800 mt-1">{stats.avg.toFixed(2)}</div>
                         </div>
                         <div className="bg-green-50 p-4 rounded-xl border border-green-100 shadow-sm">
@@ -511,34 +540,93 @@ export const TeacherCourseDetail = () => {
                         </div>
                     </div>
 
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <table className="w-full text-left">
+                    {/* TABLA DETALLADA */}
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+                        <table className="w-full text-left min-w-[900px]">
                             <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-bold border-b border-slate-200">
                                 <tr>
-                                    <th className="p-4">Estudiante</th>
-                                    <th className="p-4 text-center">Nota Final</th>
+                                    <th className="p-4 w-64 sticky left-0 bg-slate-50 z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Estudiante</th>
+                                    <th className="p-4 text-center text-slate-400">Asistencia</th>
+
+                                    {/* COLUMNAS DE PONDERACIÓN */}
+                                    <th className="p-4 text-center bg-indigo-50/50 text-indigo-900">
+                                        <div className="flex flex-col"><span>Indiv.</span><span className="text-[9px] opacity-60">Max 7</span></div>
+                                    </th>
+                                    <th className="p-4 text-center bg-indigo-50/50 text-indigo-900">
+                                        <div className="flex flex-col"><span>Grupal</span><span className="text-[9px] opacity-60">Max 5</span></div>
+                                    </th>
+                                    <th className="p-4 text-center bg-indigo-50/50 text-indigo-900">
+                                        <div className="flex flex-col"><span>Medio</span><span className="text-[9px] opacity-60">Max 2</span></div>
+                                    </th>
+                                    <th className="p-4 text-center bg-indigo-50/50 text-indigo-900">
+                                        <div className="flex flex-col"><span>Final</span><span className="text-[9px] opacity-60">Max 6</span></div>
+                                    </th>
+
+                                    <th className="p-4 text-center font-black text-slate-700 border-l border-slate-200">TOTAL</th>
                                     <th className="p-4 text-center">Estado</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {gradeMatrix.map(row => (
-                                    <tr key={row.studentId} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-4 flex items-center gap-3">
-                                            <img src={row.avatar} className="w-8 h-8 rounded-full bg-slate-200" alt="av" />
-                                            <span className="font-bold text-slate-700 text-sm">{row.fullName}</span>
-                                        </td>
-                                        <td className="p-4 text-center font-bold text-lg">{row.finalTotal.toFixed(2)}</td>
-                                        <td className="p-4 text-center">
-                                            {row.finalTotal >= 13.5 && <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">APROBADO</span>}
-                                            {row.finalTotal >= 9.17 && row.finalTotal < 13.5 && <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">SUSPENSO</span>}
-                                            {row.finalTotal < 9.17 && <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">REPROBADO</span>}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {gradeMatrix.map(row => {
+                                    // Validar si reprueba por faltas
+                                    const isFailedByAttendance = row.attendancePct < 60;
+
+                                    return (
+                                        <tr key={row.studentId} className="hover:bg-slate-50 transition-colors">
+                                            {/* NOMBRE + AVATAR (Sticky a la izquierda) */}
+                                            <td className="p-4 flex items-center gap-3 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                                                <img src={row.avatar} className="w-9 h-9 rounded-full bg-slate-200 object-cover" alt="av" />
+                                                <div>
+                                                    <p className="font-bold text-slate-700 text-sm">{row.fullName}</p>
+                                                    <p className="text-[10px] text-slate-400">ID: {row.studentId}</p>
+                                                </div>
+                                            </td>
+
+                                            {/* ASISTENCIA */}
+                                            <td className="p-4 text-center">
+                                                <span className={`font-bold text-sm ${isFailedByAttendance ? 'text-red-600 bg-red-50 px-2 py-1 rounded' : 'text-slate-600'}`}>
+                                                    {row.attendancePct}%
+                                                </span>
+                                            </td>
+
+                                            {/* NOTAS DESGLOSADAS */}
+                                            <td className="p-4 text-center text-slate-600 font-medium bg-slate-50/30">{row.breakdown.INDIVIDUAL.toFixed(2)}</td>
+                                            <td className="p-4 text-center text-slate-600 font-medium bg-slate-50/30">{row.breakdown.GRUPAL.toFixed(2)}</td>
+                                            <td className="p-4 text-center text-slate-600 font-medium bg-slate-50/30">{row.breakdown.MEDIO.toFixed(2)}</td>
+                                            <td className="p-4 text-center text-slate-600 font-medium bg-slate-50/30">{row.breakdown.FINAL.toFixed(2)}</td>
+
+                                            {/* NOTA FINAL */}
+                                            <td className="p-4 text-center border-l border-slate-200">
+                                                <span className={`text-lg font-black ${isFailedByAttendance ? 'text-red-400 line-through decoration-2' :
+                                                    row.finalTotal >= 14 ? 'text-green-600' :
+                                                        row.finalTotal >= 9 ? 'text-yellow-600' : 'text-red-600'
+                                                    }`}>
+                                                    {row.finalTotal.toFixed(2)}
+                                                </span>
+                                            </td>
+
+                                            {/* ESTADO FINAL */}
+                                            <td className="p-4 text-center">
+                                                {isFailedByAttendance ? (
+                                                    <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-bold border border-red-200 flex flex-col items-center">
+                                                        <span>REPROBADO</span>
+                                                        <span className="text-[8px] opacity-75">POR FALTAS</span>
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        {row.finalTotal >= 14 && <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">APROBADO</span>}
+                                                        {row.finalTotal >= 9 && row.finalTotal < 14 && <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">SUSPENSO</span>}
+                                                        {row.finalTotal < 9 && <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">REPROBADO</span>}
+                                                    </>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                                 {gradeMatrix.length === 0 && (
                                     <tr>
-                                        <td colSpan={3} className="p-8 text-center text-slate-400">
-                                            No hay calificaciones registradas aún.
+                                        <td colSpan={8} className="p-12 text-center text-slate-400">
+                                            No hay estudiantes ni calificaciones registradas.
                                         </td>
                                     </tr>
                                 )}

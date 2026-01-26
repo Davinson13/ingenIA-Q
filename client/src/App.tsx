@@ -8,7 +8,7 @@ import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { CalendarPage } from './pages/student/CalendarPage';
 import { AiTutorPage } from './pages/student/AiTutorPage';
-import { StudentCoursesPage } from './pages/student/StudentCoursesPage'; 
+import { StudentCoursesPage } from './pages/student/StudentCoursesPage';
 import { StudentCourseDetail } from './pages/student/StudentCourseDetail';
 
 
@@ -17,9 +17,10 @@ import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
 import { TeacherCoursesPage } from './pages/teacher/TeacherCoursesPage';
 import { TeacherGradesPage } from './pages/teacher/TeacherGradesPage';
 import { TeacherAttendancePage } from './pages/teacher/TeacherAttendancePage';
-import { TeacherCalendarPage } from './pages/teacher/TeacherCalendarPage';
+import { TeacherCalendar } from './pages/teacher/TeacherCalendar';
 import { TeacherCourseDetail } from './pages/teacher/TeacherCourseDetail';
 import { TeacherActivityGradePage } from './pages/teacher/TeacherActivityGradePage';
+import { TeacherTutoring } from './pages/teacher/TeacherTutoring';
 
 // Puedes importar las otras páginas cuando las crees realmente
 
@@ -57,8 +58,11 @@ function App() {
           <Route path="grades" element={<TeacherGradesPage />} />
           <Route path="course/:id" element={<TeacherCourseDetail />} />
           <Route path="attendance" element={<TeacherAttendancePage />} />
-          <Route path="calendar" element={<TeacherCalendarPage />} />
-          <Route path="/teacher/course/:courseId/activity/:activityId/grade" element={<TeacherActivityGradePage />}/>
+          <Route path="calendar" element={<TeacherCalendar />} />
+          <Route path="/teacher/course/:courseId/activity/:activityId/grade" element={<TeacherActivityGradePage />} />
+          <Route
+            path="/teacher/tutorings" element={<TeacherTutoring />}
+          />
         </Route>
       </Route>
 

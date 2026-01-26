@@ -1,15 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
-import { 
-    ArrowLeft, Save, ExternalLink, Calendar, RefreshCw, AlertTriangle, CheckCircle, MessageSquare 
+import {
+    ArrowLeft, Save, ExternalLink, Calendar, RefreshCw, AlertTriangle, CheckCircle, MessageSquare
 } from 'lucide-react';
 
 interface ActivityInfo {
     id: number;
     title: string;
     description?: string; // 👈 Descripción de la tarea
-    limitDate: string;
+    date: string;
 }
 
 interface StudentRow {
@@ -20,34 +20,34 @@ interface StudentRow {
     submissionLink: string | null;
     submittedAt: string | null; // 👈 Fecha real de entrega
     feedback: string;           // 👈 Comentario del docente
-    hasGrade?: boolean; 
+    hasGrade?: boolean;
 }
 
 export const TeacherActivityGradePage = () => {
     const { courseId, activityId } = useParams();
     const navigate = useNavigate();
-    
+
     const [activityInfo, setActivityInfo] = useState<ActivityInfo | null>(null);
     const [students, setStudents] = useState<StudentRow[]>([]);
     const [loading, setLoading] = useState(true);
 
     const loadData = useCallback(async () => {
         try {
-            const res = await api.get(`/teacher/activity/${activityId}/grades`);
+            const res = await api.get(`/teacher/activity/${activityId}`);
             setActivityInfo(res.data.activity);
-            
+
             const mappedStudents = res.data.students.map((s: StudentRow) => ({
                 ...s,
                 score: s.score === null || s.score === undefined ? '' : s.score,
                 feedback: s.feedback || '' // Aseguramos que no sea null
             }));
-            
+
             setStudents(mappedStudents);
         } catch (error) {
             console.error(error);
             alert("Error cargando datos.");
-        } finally { 
-            setLoading(false); 
+        } finally {
+            setLoading(false);
         }
     }, [activityId]);
 
@@ -68,7 +68,7 @@ export const TeacherActivityGradePage = () => {
         if (!student) return;
 
         const cleanScore = String(student.score).replace(',', '.');
-        
+
         if (cleanScore !== '' && (parseFloat(cleanScore) < 0 || parseFloat(cleanScore) > 20)) {
             alert("La nota debe estar entre 0 y 20");
             return;
@@ -80,9 +80,9 @@ export const TeacherActivityGradePage = () => {
                 score: cleanScore,
                 feedback: student.feedback // 👈 Enviamos el comentario
             });
-            
+
             alert(`✅ Calificación guardada para ${student.fullName}`);
-            loadData(); 
+            loadData();
         } catch (error) {
             console.error(error);
             alert("❌ Error al guardar");
@@ -90,15 +90,15 @@ export const TeacherActivityGradePage = () => {
     };
 
     // 🕒 CALCULADORA DE ATRASO
-    const getLateDetails = (limitDate: string, submittedAt: string | null) => {
+    const getLateDetails = (date: string, submittedAt: string | null) => {
         if (!submittedAt) return null;
-        
-        const limit = new Date(limitDate).getTime();
+
+        const limit = new Date(date).getTime();
         const submitted = new Date(submittedAt).getTime();
         const diff = submitted - limit;
 
         if (diff <= 0) {
-            return <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle size={12}/> A tiempo</span>;
+            return <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle size={12} /> A tiempo</span>;
         }
 
         // Si es tarde, calculamos cuánto
@@ -113,7 +113,7 @@ export const TeacherActivityGradePage = () => {
 
         return (
             <span className="text-xs font-bold text-red-600 flex items-center gap-1" title={new Date(submittedAt).toLocaleString()}>
-                <AlertTriangle size={12}/> {text}
+                <AlertTriangle size={12} /> {text}
             </span>
         );
     };
@@ -134,7 +134,7 @@ export const TeacherActivityGradePage = () => {
                         <h1 className="text-2xl font-bold text-slate-800">{activityInfo.title}</h1>
                         <div className="flex gap-4 mt-2 text-sm text-slate-500">
                             <span className="flex items-center gap-1">
-                                <Calendar size={14}/> Límite: {new Date(activityInfo.limitDate).toLocaleString()}
+                                <Calendar size={14} /> Límite: {new Date(activityInfo.date).toLocaleString()}
                             </span>
                         </div>
                     </div>
@@ -166,7 +166,7 @@ export const TeacherActivityGradePage = () => {
                                 {/* 1. DATOS ESTUDIANTE */}
                                 <td className="p-4">
                                     <div className="flex items-center gap-3">
-                                        <img src={student.avatar} className="w-10 h-10 rounded-full bg-slate-200" alt="av"/>
+                                        <img src={student.avatar} className="w-10 h-10 rounded-full bg-slate-200" alt="av" />
                                         <div className="flex flex-col">
                                             <span className="font-bold text-slate-700 text-sm">{student.fullName}</span>
                                             {student.hasGrade && <span className="text-[10px] text-green-600 font-bold">Calificado</span>}
@@ -178,28 +178,28 @@ export const TeacherActivityGradePage = () => {
                                 <td className="p-4 align-top">
                                     <div className="flex flex-col gap-2">
                                         {student.submissionLink ? (
-                                            <a 
-                                                href={student.submissionLink} 
-                                                target="_blank" 
+                                            <a
+                                                href={student.submissionLink}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="flex items-center gap-1 text-indigo-600 hover:underline font-bold text-xs bg-indigo-50 w-fit px-2 py-1 rounded"
                                             >
-                                                <ExternalLink size={12}/> Ver Entrega
+                                                <ExternalLink size={12} /> Ver Entrega
                                             </a>
                                         ) : (
                                             <span className="text-slate-400 text-xs italic">Sin entrega</span>
                                         )}
-                                        
+
                                         {/* CÁLCULO DE ATRASO */}
-                                        {getLateDetails(activityInfo.limitDate, student.submittedAt)}
+                                        {getLateDetails(activityInfo.date, student.submittedAt)}
                                     </div>
                                 </td>
 
                                 {/* 3. INPUT DE FEEDBACK (Retroalimentación) */}
                                 <td className="p-4 align-top">
                                     <div className="relative">
-                                        <MessageSquare size={14} className="absolute top-3 left-3 text-slate-400"/>
-                                        <textarea 
+                                        <MessageSquare size={14} className="absolute top-3 left-3 text-slate-400" />
+                                        <textarea
                                             className="w-full p-2 pl-9 border border-slate-200 rounded-lg text-xs focus:border-indigo-500 outline-none resize-none bg-slate-50 focus:bg-white transition-colors"
                                             rows={2}
                                             placeholder="Escribe un comentario..."
@@ -211,8 +211,8 @@ export const TeacherActivityGradePage = () => {
 
                                 {/* 4. INPUT DE NOTA */}
                                 <td className="p-4 align-top">
-                                    <input 
-                                        type="number" 
+                                    <input
+                                        type="number"
                                         step="0.01"
                                         max={20} min={0}
                                         className="w-full p-2 border border-slate-300 rounded text-center font-bold outline-none focus:border-indigo-500 transition-all text-lg"
@@ -224,18 +224,17 @@ export const TeacherActivityGradePage = () => {
 
                                 {/* 5. BOTÓN DE ACCIÓN */}
                                 <td className="p-4 align-top text-center">
-                                    <button 
-                                        onClick={() => saveSingleGrade(student.studentId)} 
-                                        className={`p-2 rounded-lg transition-colors text-white flex items-center justify-center gap-2 w-full text-xs font-bold shadow-sm ${
-                                            student.hasGrade 
-                                            ? 'bg-orange-500 hover:bg-orange-600' 
-                                            : 'bg-slate-900 hover:bg-slate-800'
-                                        }`}
+                                    <button
+                                        onClick={() => saveSingleGrade(student.studentId)}
+                                        className={`p-2 rounded-lg transition-colors text-white flex items-center justify-center gap-2 w-full text-xs font-bold shadow-sm ${student.hasGrade
+                                                ? 'bg-orange-500 hover:bg-orange-600'
+                                                : 'bg-slate-900 hover:bg-slate-800'
+                                            }`}
                                     >
                                         {student.hasGrade ? (
-                                            <><RefreshCw size={14}/> Actualizar</> 
+                                            <><RefreshCw size={14} /> Actualizar</>
                                         ) : (
-                                            <><Save size={14}/> Guardar</>
+                                            <><Save size={14} /> Guardar</>
                                         )}
                                     </button>
                                 </td>
