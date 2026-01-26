@@ -146,7 +146,7 @@ const getMyCourses = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// 4. DETALLE DE CURSO (CORREGIDO: Lee Eventos Reales y busca por eventId)
+// 🟢 DETALLE DE CURSO + ASISTENCIA % (Lógica Actualizada)
 const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
   try {
     const userId = req.user.id;
@@ -159,23 +159,17 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       where: { id: parallelId },
       include: {
         subject: true,
-        activities: { orderBy: { id: 'asc' } }, // Categorías fijas
-        events: { orderBy: { date: 'desc' } }   // Tareas reales
+        events: { orderBy: { date: 'desc' } }
       }
     });
 
     if (!parallel) { res.status(404).send("CURSO_NO_ENCONTRADO"); return; }
 
-    // Traemos TODAS las notas del estudiante
-    const myGrades = await prisma.activityGrade.findMany({
-      where: { studentId: userId }
-    });
+    const myGrades = await prisma.activityGrade.findMany({ where: { studentId: userId } });
 
-    // 1. LISTA DE TAREAS REALES (Basada en Eventos de Agenda)
+    // 1. LISTA DE TAREAS (Igual que antes)
     const activitiesList = parallel.events.map(evt => {
-      // 👇 BUSCAMOS LA ENTREGA POR eventId
       const submissionObj: any = myGrades.find((g: any) => g.eventId === evt.id);
-
       return {
         id: evt.id,
         name: evt.title,
@@ -183,39 +177,38 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
         description: evt.description,
         limitDate: evt.date,
         myScore: submissionObj ? submissionObj.score : null,
-        submissionLink: submissionObj?.submissionLink || null
+        submissionLink: submissionObj?.submissionLink || null,
+        submittedAt: submissionObj?.submittedAt || null,
+        feedback: submissionObj?.feedback || null
       };
     });
 
-    // 2. PROMEDIOS (Basado en Categorías Fijas)
-    const typeAccumulated: any = {
+    // 2. CÁLCULO DE PROMEDIOS (Igual que antes)
+    const accumulator: any = {
       'INDIVIDUAL': { sum: 0, count: 0, weight: 7, label: "Gestión Individual" },
       'GRUPAL': { sum: 0, count: 0, weight: 5, label: "Gestión Grupal" },
-      'MEDIO': { sum: 0, count: 0, weight: 2, label: "Examen Medio Semestre" },
+      'MEDIO': { sum: 0, count: 0, weight: 2, label: "Examen Medio" },
       'FINAL': { sum: 0, count: 0, weight: 6, label: "Examen Final" }
     };
 
-    // Para los promedios, usamos SOLO las que tienen activityId
-    parallel.activities.forEach(cat => {
-      const gradeObj: any = myGrades.find((g: any) => g.activityId === cat.id);
-      if (gradeObj && gradeObj.score !== null && typeAccumulated[cat.type]) {
-        typeAccumulated[cat.type].sum += gradeObj.score;
-        typeAccumulated[cat.type].count += 1;
+    parallel.events.forEach(evt => {
+      const grade = myGrades.find((g: any) => g.eventId === evt.id);
+      if (grade && grade.score !== null && accumulator[evt.type]) {
+        accumulator[evt.type].sum += grade.score;
+        accumulator[evt.type].count += 1;
       }
     });
 
     let finalTotal = 0;
-    const scoreSummary = Object.keys(typeAccumulated).map(key => {
-      const data = typeAccumulated[key];
+    const scoreSummary = Object.keys(accumulator).map(key => {
+      const data = accumulator[key];
       let average = 0;
       let weightedScore = 0;
-
       if (data.count > 0) {
         average = parseFloat((data.sum / data.count).toFixed(2));
         weightedScore = (average * data.weight) / 20;
       }
       finalTotal += weightedScore;
-
       return {
         category: key,
         label: data.label,
@@ -225,11 +218,30 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       };
     });
 
+    // 3. 🔥 CÁLCULO DE ASISTENCIA Y PORCENTAJE 🔥
     const enrollment = await prisma.enrollment.findFirst({ where: { userId, subjectId: parallel.subjectId } });
-
     let attendance: any[] = [];
+    let attendancePct = 100; // Por defecto 100% si no hay clases
+
     if (enrollment) {
-      attendance = await prisma.attendance.findMany({ where: { enrollmentId: enrollment.id }, orderBy: { date: 'desc' } });
+      attendance = await prisma.attendance.findMany({
+        where: { enrollmentId: enrollment.id },
+        orderBy: { date: 'desc' }
+      });
+
+      // Lógica de Puntos: Presente/Justificado = 2, Atraso = 1, Falta = 0
+      let totalPoints = 0;
+      let maxPoints = attendance.length * 2;
+
+      attendance.forEach(att => {
+        if (att.status === 'PRESENT' || att.status === 'EXCUSED') totalPoints += 2;
+        else if (att.status === 'LATE') totalPoints += 1;
+        // ABSENT suma 0
+      });
+
+      if (maxPoints > 0) {
+        attendancePct = (totalPoints / maxPoints) * 100;
+      }
     }
 
     res.send({
@@ -239,10 +251,11 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       scoreSummary: scoreSummary,
       finalTotal: parseFloat(finalTotal.toFixed(2)),
       agenda: parallel.events,
-      attendance: attendance
+      attendance: attendance,
+      attendancePct: parseFloat(attendancePct.toFixed(2)) // 👈 Enviamos el % calculado
     });
 
-  } catch (e) { console.log(e); res.status(500).send("ERROR_GETTING_DETAILS"); }
+  } catch (e) { console.log(e); res.status(500).send("ERROR"); }
 };
 
 // 5. ENVIAR TAREA (Versión Debug)
