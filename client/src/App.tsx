@@ -10,6 +10,7 @@ import { CalendarPage } from './pages/student/CalendarPage';
 import { AiTutorPage } from './pages/student/AiTutorPage';
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage';
 import { StudentCourseDetail } from './pages/student/StudentCourseDetail';
+import { StudentTutoringPage } from './pages/student/StudentTutoringPage';
 
 
 // Páginas Docente
@@ -42,6 +43,7 @@ function App() {
           <Route path="course/:id" element={<StudentCourseDetail />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
+          <Route path="/dashboard/tutorings" element={<StudentTutoringPage />} />
         </Route>
       </Route>
 

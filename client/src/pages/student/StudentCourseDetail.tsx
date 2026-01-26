@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState, useCallback } from 'react'; // 👈 Eliminado "React" para evitar el warning
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
 import {
@@ -55,7 +55,12 @@ interface CourseData {
     finalTotal: number;
     agenda?: AgendaEvent[];
     attendance?: AttendanceRecord[];
-    attendancePct: number; // 👈 Nuevo: Porcentaje de asistencia del backend
+    attendancePct: number;
+}
+
+// 🔥 NUEVA INTERFAZ PARA EL ESTADO DE NAVEGACIÓN
+interface LocationState {
+    activityId?: number;
 }
 
 // --- CONSTANTES ---
@@ -70,6 +75,7 @@ const TABS: { id: TabOption; label: string; icon: React.ElementType }[] = [
 export const StudentCourseDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const theme = getTheme('STUDENT');
 
     const [activeTab, setActiveTab] = useState<TabOption>('ACTIVITIES');
@@ -123,6 +129,23 @@ export const StudentCourseDetail = () => {
         setShowModal(true);
     };
 
+    // 🔥 EFECTO CORREGIDO (SIN ANY)
+    useEffect(() => {
+        // Hacemos un "cast" seguro a nuestra interfaz LocationState
+        const state = location.state as LocationState;
+
+        if (data && state && state.activityId) {
+            const targetId = state.activityId;
+            const targetActivity = data.activities?.find(a => a.id === targetId);
+
+            if (targetActivity) {
+                setActiveTab('ACTIVITIES');
+                openSubmitModal(targetActivity.id, targetActivity.submissionLink);
+                window.history.replaceState({}, document.title);
+            }
+        }
+    }, [data, location.state]);
+
     const getStatusBadge = (act: StudentActivity) => {
         const now = new Date();
         const limit = act.limitDate ? new Date(act.limitDate) : null;
@@ -141,7 +164,6 @@ export const StudentCourseDetail = () => {
     if (error) return <div className="p-20 text-center text-red-500 font-bold">{error}</div>;
     if (!data) return null;
 
-    // 🔥 CALCULAR ESTADO FINAL: Si % < 60, REPRUEBA AUTOMÁTICAMENTE
     const isFailedByAttendance = data.attendancePct < 60;
 
     return (
@@ -224,7 +246,7 @@ export const StudentCourseDetail = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* 🔥 CARD DE ASISTENCIA */}
+                        {/* CARD DE ASISTENCIA */}
                         <div className={`p-6 rounded-xl flex justify-between items-center shadow-lg border ${isFailedByAttendance ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
                             <div>
                                 <p className={`text-sm font-bold uppercase tracking-wider ${isFailedByAttendance ? 'text-red-600' : 'text-slate-500'}`}>Porcentaje Asistencia</p>
@@ -257,7 +279,6 @@ export const StudentCourseDetail = () => {
             {/* 3. ASISTENCIA */}
             {activeTab === 'ATTENDANCE' && (
                 <div className="max-w-4xl mx-auto">
-                    {/* 🔥 RESUMEN DE PORCENTAJE ARRIBA DE LA LISTA */}
                     <div className={`mb-6 p-4 rounded-xl flex items-center justify-between border ${isFailedByAttendance ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200'}`}>
                         <div className="flex items-center gap-3">
                             <div className={`p-3 rounded-full ${isFailedByAttendance ? 'bg-red-100 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
@@ -285,9 +306,9 @@ export const StudentCourseDetail = () => {
                                         <div><p className="font-bold text-slate-700 capitalize">{formatDateUTC(att.date)}</p></div>
                                     </div>
                                     <span className={`text-xs font-bold px-3 py-1 rounded-full border ${att.status === 'PRESENT' ? 'bg-green-50 border-green-200 text-green-700' :
-                                            att.status === 'LATE' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
-                                                att.status === 'EXCUSED' ? 'bg-blue-50 border-blue-200 text-blue-700' :
-                                                    'bg-red-50 border-red-200 text-red-700'
+                                        att.status === 'LATE' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
+                                            att.status === 'EXCUSED' ? 'bg-blue-50 border-blue-200 text-blue-700' :
+                                                'bg-red-50 border-red-200 text-red-700'
                                         }`}>
                                         {att.status === 'PRESENT' ? 'ASISTIÓ' : att.status === 'LATE' ? 'ATRASO' : att.status === 'EXCUSED' ? 'JUSTIFICADO' : 'FALTA'}
                                     </span>

@@ -389,7 +389,8 @@ async function main() {
 
     if (materia.semesterLevel < 3) {
       estado = 'APPROVED';
-      nota = parseFloat((Math.random() * (10 - 7) + 7).toFixed(1));
+      // 🔥 CORRECCIÓN: Nota sobre 20 (Rango 14-20)
+      nota = parseFloat((Math.random() * (20 - 14) + 14).toFixed(1));
     } else if (materia.semesterLevel === 3) {
       estado = 'TAKING';
     }
@@ -477,7 +478,8 @@ async function main() {
 main()
   .catch((e) => {
     console.error(e);
-    process.exit(1);
+    // 🔥 CORRECCIÓN: Usamos throw en lugar de process.exit(1) para evitar el error de tipos
+    throw e;
   })
   .finally(async () => {
     await prisma.$disconnect();
