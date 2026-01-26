@@ -78,46 +78,53 @@ const getCourseGrades = async (req: RequestWithUser, res: Response) => {
     } catch (e) { console.log(e); res.status(500).send("ERROR"); }
 };
 
-// 5. DETALLE DE ACTIVIDAD (CORREGIDO)
+// 🟢 8. OBTENER ESTUDIANTES PARA CALIFICAR (Estrategia Robusta)
+// 🟢 8. OBTENER ESTUDIANTES DE UNA ACTIVIDAD (CORREGIDO)
 const getActivityGrades = async (req: RequestWithUser, res: Response) => {
     try {
         const { activityId } = req.params;
+
+        // 🔥 CORRECCIÓN: Usamos String() para asegurar que sea texto
         const eventId = parseInt(String(activityId));
 
-        const event = await prisma.event.findUnique({ where: { id: eventId } });
-        if (!event) { res.status(404).send("ACTIVIDAD_NO_ENCONTRADA"); return; }
+        if (isNaN(eventId)) { res.status(400).send("ID INVALIDO"); return; }
 
-        const parallel = await prisma.parallel.findUnique({ where: { id: event.parallelId } });
-        if (!parallel) { res.status(404).send("PARALELO_NO_ENCONTRADO"); return; }
+        // 1. Buscamos el EVENTO
+        const event = await prisma.event.findUnique({
+            where: { id: eventId },
+            include: { parallel: { include: { subject: true } } }
+        });
 
+        if (!event) return res.status(404).send("Actividad no encontrada");
+
+        // 2. Buscamos TODOS los estudiantes del curso
         const enrollments = await prisma.enrollment.findMany({
             where: {
-                status: 'TAKING',
-                OR: [
-                    { parallelId: parallel.id },
-                    { subjectId: parallel.subjectId, parallelId: null }
-                ]
+                OR: [{ parallelId: event.parallelId }, { subjectId: event.parallel.subjectId, parallelId: null }],
+                status: 'TAKING'
             },
             include: { user: true },
             orderBy: { user: { fullName: 'asc' } }
         });
 
-        // 🔥 FIX: Buscamos notas ignorando tipado estricto
+        // 3. Buscamos las NOTAS existentes
         const grades = await prisma.activityGrade.findMany({
-            where: { eventId: eventId } as any
+            where: { eventId: eventId }
         });
 
-        const roster = enrollments.map(enrollment => {
-            const submission = (grades as any[]).find(g => g.studentId === enrollment.user.id);
+        // 4. MEZCLAMOS
+        const students = enrollments.map(enr => {
+            const grade = grades.find(g => g.studentId === enr.userId);
+
             return {
-                studentId: enrollment.user.id,
-                fullName: enrollment.user.fullName,
-                avatar: `https://ui-avatars.com/api/?name=${enrollment.user.fullName}&background=random`,
-                score: (submission && submission.score !== null) ? submission.score : '',
-                submissionLink: submission?.submissionLink || null,
-                feedback: submission?.feedback || '',
-                submittedAt: submission?.submittedAt || null,
-                hasGrade: (submission && submission.score !== null)
+                studentId: enr.userId,
+                fullName: enr.user.fullName,
+                avatar: `https://ui-avatars.com/api/?name=${enr.user.fullName}&background=random`,
+                gradeId: grade?.id || null,
+                score: grade?.score !== null && grade?.score !== undefined ? grade.score : "",
+                feedback: grade?.feedback || "",
+                submissionLink: grade?.submissionLink || null,
+                submittedAt: grade?.submittedAt || null
             };
         });
 
@@ -126,42 +133,55 @@ const getActivityGrades = async (req: RequestWithUser, res: Response) => {
                 id: event.id,
                 title: event.title,
                 description: event.description,
-                limitDate: event.date
+                date: event.date,
+                type: event.type
             },
-            students: roster
+            students
         });
 
-    } catch (e) { console.error(e); res.status(500).send("ERROR"); }
+    } catch (e) {
+        console.error("Error cargando actividad:", e);
+        res.status(500).send("ERROR_LOADING_ACTIVITY");
+    }
 };
 
-// 6. GUARDAR NOTA
+// 🟢 9. GUARDAR NOTA (CORREGIDO)
 const saveActivityGrade = async (req: RequestWithUser, res: Response) => {
     try {
         const { activityId } = req.params;
         const { studentId, score, feedback } = req.body;
 
-        const eventIdInt = parseInt(String(activityId));
-        const studentIdInt = parseInt(String(studentId));
+        // 🔥 CORRECCIÓN: Usamos String() aquí también
+        const eventId = parseInt(String(activityId));
+        const sId = parseInt(String(studentId));
 
-        const whereClause: any = {
-            studentId_eventId: { studentId: studentIdInt, eventId: eventIdInt }
-        };
+        const finalScore = (score === "" || score === null) ? null : parseFloat(score);
 
-        const submission = await prisma.activityGrade.upsert({
-            where: whereClause,
-            update: { score: parseFloat(score), feedback: feedback },
+        const grade = await prisma.activityGrade.upsert({
+            where: {
+                studentId_eventId: {
+                    studentId: sId,
+                    eventId: eventId
+                }
+            },
+            update: { score: finalScore, feedback: feedback },
             create: {
-                studentId: studentIdInt,
-                eventId: eventIdInt,
-                score: parseFloat(score),
+                studentId: sId,
+                eventId: eventId,
+                score: finalScore,
                 feedback: feedback
-            } as any
+            }
         });
-        res.send(submission);
-    } catch (e) { console.error(e); res.status(500).send("ERROR"); }
+
+        res.send(grade);
+
+    } catch (e) {
+        console.error("Error guardando nota:", e);
+        res.status(500).send("ERROR_SAVING_GRADE");
+    }
 };
 
-// 🟢 7. MATRIZ DE NOTAS + ASISTENCIA (Lógica Completa)
+// 🟢 7. MATRIZ DE NOTAS + ASISTENCIA (ESTRATEGIA ESPEJO: BUSCAR POR ESTUDIANTE)
 const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
     try {
         const { courseId } = req.params;
@@ -169,53 +189,64 @@ const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
 
         if (isNaN(parallelId)) { res.status(400).send("ID INVALIDO"); return; }
 
-        // 1. Buscamos el paralelo y sus eventos
-        const parallel = await prisma.parallel.findUnique({
-            where: { id: parallelId },
-            include: { events: true }
-        });
+        console.log(`🔍 Buscando matriz para curso ${parallelId}...`);
 
+        // 1. Buscamos estudiantes (ENROLLMENTS)
+        const parallel = await prisma.parallel.findUnique({ where: { id: parallelId } });
         if (!parallel) return res.status(404).send("Curso no encontrado");
 
-        // 2. Buscamos estudiantes
         const enrollments = await prisma.enrollment.findMany({
             where: {
                 OR: [{ parallelId: parallelId }, { subjectId: parallel.subjectId, parallelId: null }],
                 status: 'TAKING'
             },
-            include: { user: true }
+            include: { user: true },
+            orderBy: { user: { fullName: 'asc' } }
         });
 
-        // 3. Traemos NOTAS
-        const eventsWithGrades = await prisma.event.findMany({
-            where: { parallelId: parallelId },
-            include: { ActivityGrade: true } as any
-        });
+        const studentIds = enrollments.map(e => e.userId);
+        console.log(`👥 Estudiantes encontrados: ${studentIds.length}`);
 
-        // 4. 🔥 NUEVO: Traemos TODA la ASISTENCIA de este curso
-        const allAttendance = await prisma.attendance.findMany({
+        // 2. Buscamos EVENTOS
+        const events = await prisma.event.findMany({
+            where: { parallelId: parallelId }
+        });
+        console.log(`📅 Eventos encontrados: ${events.length}`);
+
+        // 3. 🔥 FIX: Buscamos notas por ESTUDIANTE (Igual que el controlador de alumno)
+        // Esto garantiza que si el alumno ve la nota, el profe también.
+        const allGrades = await prisma.activityGrade.findMany({
             where: {
-                enrollmentId: { in: enrollments.map(e => e.id) }
+                studentId: { in: studentIds } // Traemos todas las notas de estos alumnos
             }
+        });
+        console.log(`📝 Notas crudas encontradas: ${allGrades.length}`);
+
+        // 4. Buscamos ASISTENCIA
+        const allAttendance = await prisma.attendance.findMany({
+            where: { enrollmentId: { in: enrollments.map(e => e.id) } }
         });
 
         const WEIGHTS: any = { 'INDIVIDUAL': 7, 'GRUPAL': 5, 'MEDIO': 2, 'FINAL': 6 };
 
+        // 5. CRUCE DE DATOS EN MEMORIA
         const matrix = enrollments.map(enr => {
             const studentId = enr.userId;
 
-            // --- A. CÁLCULO DE NOTAS (Igual que antes) ---
             const acc: any = {
                 'INDIVIDUAL': { sum: 0, count: 0 }, 'GRUPAL': { sum: 0, count: 0 },
                 'MEDIO': { sum: 0, count: 0 }, 'FINAL': { sum: 0, count: 0 }
             };
 
-            eventsWithGrades.forEach((evt: any) => {
-                const gradesArray = evt.ActivityGrade || evt.activityGrades || [];
-                const grade = gradesArray.find((g: any) => g.studentId === studentId);
+            // Recorremos los eventos del curso
+            events.forEach((evt) => {
                 const typeKey = evt.type ? evt.type.toUpperCase() : 'INDIVIDUAL';
 
-                if (grade && grade.score !== null && acc[typeKey]) {
+                // Buscamos si este alumno tiene nota para este evento
+                // Usamos filtro en memoria que es infalible
+                const grade = allGrades.find(g => g.eventId === evt.id && g.studentId === studentId);
+
+                if (grade && grade.score !== null && grade.score !== undefined) {
                     acc[typeKey].sum += Number(grade.score);
                     acc[typeKey].count += 1;
                 }
@@ -223,31 +254,28 @@ const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
 
             let finalTotal = 0;
             const breakdown: any = {};
+
             Object.keys(WEIGHTS).forEach(key => {
                 const data = acc[key];
                 let weighted = 0;
                 if (data.count > 0) {
+                    // Promedio * (Peso / 20)
                     weighted = (data.sum / data.count / 20) * WEIGHTS[key];
                 }
                 breakdown[key] = parseFloat(weighted.toFixed(2));
                 finalTotal += weighted;
             });
 
-            // --- B. 🔥 CÁLCULO DE ASISTENCIA ---
-            // Filtramos las asistencias de ESTE estudiante
+            // Asistencia
             const studentAtt = allAttendance.filter(a => a.enrollmentId === enr.id);
-
             let totalPoints = 0;
-            let maxPoints = studentAtt.length * 2; // Cada clase vale 2 puntos máx
+            let maxPoints = studentAtt.length * 2;
 
             studentAtt.forEach(att => {
-                if (att.status === 'PRESENT') totalPoints += 2;
+                if (att.status === 'PRESENT' || att.status === 'EXCUSED') totalPoints += 2;
                 else if (att.status === 'LATE') totalPoints += 1;
-                else if (att.status === 'EXCUSED') totalPoints += 2; // Justificado cuenta como asistencia
-                // ABSENT suma 0
             });
 
-            // Si no hay clases registradas, asumimos 100% para no reprobar al inicio
             let attendancePct = maxPoints > 0 ? (totalPoints / maxPoints) * 100 : 100;
 
             return {
@@ -256,10 +284,11 @@ const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
                 avatar: `https://ui-avatars.com/api/?name=${enr.user.fullName}&background=random`,
                 breakdown,
                 finalTotal: parseFloat(finalTotal.toFixed(2)),
-                attendancePct: parseFloat(attendancePct.toFixed(2)) // Enviamos el %
+                attendancePct: parseFloat(attendancePct.toFixed(2))
             };
         });
 
+        // Promedios globales
         const courseSum = matrix.reduce((acc, curr) => acc + curr.finalTotal, 0);
         const courseAverage = matrix.length > 0 ? (courseSum / matrix.length) : 0;
 
@@ -269,7 +298,7 @@ const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
         });
 
     } catch (e) {
-        console.error("Error en Matriz:", e);
+        console.error("Error FATAL en Matriz:", e);
         res.status(500).send("ERROR_GETTING_GRADE_MATRIX");
     }
 };
