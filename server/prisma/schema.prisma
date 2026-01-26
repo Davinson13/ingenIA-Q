@@ -34,6 +34,7 @@ model User {
   tutoringsCreated Tutoring[] @relation("TeacherTutorings")
   tutoringBookings TutoringBooking[]
   activityGrades ActivityGrade[]
+  personalEvents PersonalEvent[]
 }
 
 model Career {
@@ -142,24 +143,23 @@ model Enrollment {
 
 // ... modelos anteriores ...
 
-// MODELO DE TUTORÍAS (Para el futuro módulo de Calendario)
+// Busca el modelo Tutoring y agrega esto:
 model Tutoring {
   id        Int      @id @default(autoincrement())
-  date      DateTime // Fecha y Hora
-  capacity  Int      // Cupos disponibles
-  notes     String?  // Tema o descripción
+  date      DateTime
+  capacity  Int
+  notes     String?
   
-  // Relación con el Profe
+  // 👇 NUEVO CAMPO
+  modality  String   @default("PRESENCIAL") // "PRESENCIAL" o "VIRTUAL"
+
   teacherId Int
   teacher   User     @relation("TeacherTutorings", fields: [teacherId], references: [id])
   
-  // Relación con Materia (Opcional, puede ser tutoría general)
   subjectId Int?
   subject   Subject? @relation(fields: [subjectId], references: [id])
   
-  // Lista de estudiantes inscritos
   bookings  TutoringBooking[]
-  
   createdAt DateTime @default(now())
 }
 
@@ -249,4 +249,17 @@ model Event {
   activityGrades ActivityGrade[]
   parallel    Parallel @relation(fields: [parallelId], references: [id])
   parallelId  Int
+}
+
+// --- EVENTOS PERSONALES / EXTRACURRICULARES ---
+model PersonalEvent {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  date        DateTime
+  
+  teacherId   Int
+  teacher     User     @relation(fields: [teacherId], references: [id])
+
+  createdAt   DateTime @default(now())
 }

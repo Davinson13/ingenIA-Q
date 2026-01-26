@@ -177,7 +177,7 @@ export const TeacherCourseDetail = () => {
         if (!id) return;
 
         if (activeTab === 'ACTIVITIES') {
-            api.get(`/teacher/calendar?courseId=${id}`)
+            api.get(`/teacher/events?courseId=${id}`) // 👈 Ruta específica
                 .then(res => setActivities(Array.isArray(res.data) ? res.data : []))
                 .catch(err => console.error("Error cargando actividades", err));
         }
@@ -216,10 +216,10 @@ export const TeacherCourseDetail = () => {
                 parallelId: id
             };
 
-            await api.post('/teacher/calendar', payload);
+            await api.post('/teacher/events', payload); // 👈 Ruta específica
 
             // Recargar la lista inmediatamente
-            const res = await api.get(`/teacher/calendar?courseId=${id}`);
+            const res = await api.get(`/teacher/events?courseId=${id}`);
             setActivities(res.data);
 
             setShowAddForm(false);
@@ -245,7 +245,7 @@ export const TeacherCourseDetail = () => {
     const handleDeleteActivity = async (activityId: number) => {
         if (!confirm("¿Borrar actividad? Se eliminarán las notas asociadas.")) return;
         try {
-            await api.delete(`/teacher/calendar/${activityId}`);
+            await api.delete(`/teacher/events/${activityId}`); // 👈 Ruta específica
             setActivities(prev => prev.filter(a => a.id !== activityId));
         } catch (error) { console.error(error); }
     };
@@ -598,8 +598,8 @@ export const TeacherCourseDetail = () => {
                                             {/* NOTA FINAL */}
                                             <td className="p-4 text-center border-l border-slate-200">
                                                 <span className={`text-lg font-black ${isFailedByAttendance ? 'text-red-400 line-through decoration-2' :
-                                                        row.finalTotal >= 14 ? 'text-green-600' :
-                                                            row.finalTotal >= 9 ? 'text-yellow-600' : 'text-red-600'
+                                                    row.finalTotal >= 14 ? 'text-green-600' :
+                                                        row.finalTotal >= 9 ? 'text-yellow-600' : 'text-red-600'
                                                     }`}>
                                                     {row.finalTotal.toFixed(2)}
                                                 </span>

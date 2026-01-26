@@ -7,57 +7,175 @@ interface RequestWithUser extends Request {
     user?: any;
 }
 
-// 1. DASHBOARD DOCENTE
+// 🟢 1. DASHBOARD DEL DOCENTE (CORREGIDO: Conteo de Estudiantes)
+// ... (imports anteriores)
+
+// 🟢 1. DASHBOARD (MODIFICADO: AHORA INCLUYE TUTORÍAS)
 const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
     try {
         const teacherId = req.user.id;
-        const parallels = await prisma.parallel.findMany({
-            where: { teacherId: teacherId },
-            include: { subject: true, period: true, schedules: true }
-        });
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        const courses = parallels.map(p => ({
-            id: p.subject.id,
-            subjectName: p.subject.name,
-            code: p.code,
-            period: p.period.name,
-            schedule: p.schedules.map(s => ({
-                id: s.id, dayOfWeek: s.dayOfWeek, startTime: s.startTime, endTime: s.endTime
-            }))
+        // ... (La parte de courses, students y pendingGrades se queda IGUAL) ...
+        // ... (Copia la lógica de los pasos 1, 2, 3, 4 y 5 del código anterior) ...
+
+        // 1. Cursos
+        const courses = await prisma.parallel.findMany({
+            where: { teacherId: teacherId },
+            include: { subject: true, _count: { select: { enrollments: true } } }
+        });
+        const totalCourses = courses.length;
+
+        // 2. Estadística de Cursos (Para gráficas)
+        const courseStats = await Promise.all(courses.map(async (c) => {
+            const studentCount = await prisma.enrollment.count({
+                where: { OR: [{ parallelId: c.id }, { subjectId: c.subjectId, parallelId: null }], status: 'TAKING' }
+            });
+            const grades = await prisma.activityGrade.findMany({
+                where: { event: { parallelId: c.id }, score: { not: null } }, select: { score: true }
+            });
+            const sum = grades.reduce((acc, g) => acc + (g.score || 0), 0);
+            const avg = grades.length > 0 ? (sum / grades.length) : 0;
+            return { id: c.id, name: c.subject.name, code: c.code, students: studentCount, average: parseFloat(avg.toFixed(2)) };
         }));
 
-        res.send({ courses, tutorings: [] });
-    } catch (e) { console.log(e); res.status(500).send("ERROR"); }
+        const totalStudents = courseStats.reduce((acc, c) => acc + c.students, 0);
+        const riskCount = courseStats.filter(c => c.average > 0 && c.average < 14).length;
+        const pendingGrades = await prisma.activityGrade.count({
+            where: { event: { parallel: { teacherId: teacherId } }, submissionLink: { not: null }, score: null }
+        });
+
+        // 6. 🔥 AGENDA HÍBRIDA (CLASES + TUTORÍAS)
+
+        // A. Buscamos EVENTOS académicos (Exámenes, tareas)
+        const academicEvents = await prisma.event.findMany({
+            where: { parallel: { teacherId: teacherId }, date: { gte: today } },
+            include: { parallel: { include: { subject: true } } }
+        });
+
+        // B. Buscamos TUTORÍAS creadas por el docente
+        const tutoringEvents = await prisma.tutoring.findMany({
+            where: { teacherId: teacherId, date: { gte: today } },
+            include: { subject: true }
+        });
+
+        // C. Unificamos y ordenamos
+        const mixedEvents = [
+            ...academicEvents.map(evt => ({
+                id: evt.id,
+                title: evt.title,
+                date: evt.date,
+                type: evt.type, // INDIVIDUAL, GRUPAL, etc.
+                courseName: evt.parallel.subject.name,
+                isTutoring: false
+            })),
+            ...tutoringEvents.map(tut => ({
+                id: tut.id,
+                title: "Tutoría: " + (tut.notes || "General"),
+                date: tut.date,
+                type: "TUTORIA", // Tipo especial para el front
+                courseName: tut.subject ? tut.subject.name : "Todas las materias",
+                isTutoring: true
+            }))
+        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            .slice(0, 5); // Tomamos los 5 próximos reales
+
+        res.send({
+            stats: { courses: totalCourses, students: totalStudents, pending: pendingGrades, risk: riskCount },
+            courseStats,
+            nextEvents: mixedEvents // Enviamos la lista mezclada
+        });
+
+    } catch (e) {
+        console.error(e);
+        res.status(500).send("ERROR_DASHBOARD");
+    }
 };
 
-// 2. CREAR TUTORÍA
+// 🟢 10. CREAR TUTORÍA (Con Modalidad)
 const createTutoring = async (req: RequestWithUser, res: Response) => {
-    res.send({ message: "Simulado" });
+    try {
+        const teacherId = req.user.id;
+        // 👇 Recibimos 'modality'
+        const { date, time, subjectId, capacity, notes, modality } = req.body;
+
+        const dateTimeString = `${date}T${time}:00.000Z`;
+        const finalSubjectId = (subjectId && subjectId !== "0" && subjectId !== 0) ? parseInt(subjectId) : null;
+
+        const tutoring = await prisma.tutoring.create({
+            data: {
+                date: dateTimeString,
+                capacity: parseInt(capacity),
+                notes: notes,
+                modality: modality || "PRESENCIAL", // 👇 Guardamos
+                teacherId: teacherId,
+                subjectId: finalSubjectId
+            }
+        });
+
+        res.send(tutoring);
+    } catch (e) {
+        console.error("Error creando tutoría:", e);
+        res.status(500).send("ERROR_CREATING_TUTORING");
+    }
 };
 
-// 3. MIS CURSOS
+// 🟢 11. LISTAR TUTORÍAS (Con Modalidad)
+const getTutorings = async (req: RequestWithUser, res: Response) => {
+    try {
+        const teacherId = req.user.id;
+
+        const tutorings = await prisma.tutoring.findMany({
+            where: { teacherId: teacherId },
+            include: {
+                subject: true,
+                bookings: { include: { student: true } }
+            },
+            orderBy: { date: 'asc' }
+        });
+
+        const data = tutorings.map(t => ({
+            id: t.id,
+            date: t.date,
+            capacity: t.capacity,
+            booked: t.bookings.length,
+            notes: t.notes,
+            modality: t.modality, // 👇 Enviamos al front
+            subjectName: t.subject ? t.subject.name : "General (Cualquier materia)",
+            students: t.bookings.map(b => b.student.fullName)
+        }));
+
+        res.send(data);
+    } catch (e) {
+        console.error(e);
+        res.status(500).send("ERROR_GETTING_TUTORINGS");
+    }
+};
+
+// 🟢 OBTENER LISTA DE CURSOS (Con nombre aplanado para las tarjetas)
 const getTeacherCourses = async (req: RequestWithUser, res: Response) => {
     try {
         const teacherId = req.user.id;
+
         const courses = await prisma.parallel.findMany({
             where: { teacherId: teacherId },
-            include: { subject: true, period: true, schedules: true }
+            include: { subject: true },
+            orderBy: { subject: { name: 'asc' } }
         });
 
-        const coursesWithStudents = await Promise.all(courses.map(async (course) => {
-            const count = await prisma.enrollment.count({
-                where: { subjectId: course.subjectId, status: 'TAKING' }
-            });
-            return {
-                id: course.id,
-                subjectName: course.subject.name,
-                code: course.code,
-                period: course.period.name,
-                studentCount: count
-            };
+        // 🔥 MAPEO: Sacamos 'subject.name' a 'name' para que el frontend no se confunda
+        const data = courses.map(c => ({
+            ...c,
+            name: c.subject.name,
+            description: `Paralelo ${c.code}` // Opcional, para que tenga descripción
         }));
-        res.send(coursesWithStudents);
-    } catch (e) { console.log(e); res.status(500).send("ERROR"); }
+
+        res.send(data);
+    } catch (e) {
+        console.error(e);
+        res.status(500).send("ERROR_GETTING_COURSES");
+    }
 };
 
 // 4. HEADER DEL CURSO
@@ -409,6 +527,7 @@ const updateStudentGrade = async (req: RequestWithUser, res: Response) => {
 export {
     getTeacherDashboard,
     createTutoring,
+    getTutorings,
     getTeacherCourses,
     getCourseGrades,
     getActivityGrades,

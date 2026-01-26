@@ -5,6 +5,7 @@ import { checkJwt } from "../middleware/session";
 import {
   getTeacherDashboard,
   createTutoring,
+  getTutorings,
   getTeacherCourses,
   getCourseGrades,        // Info cabecera del curso
   getCourseGradeMatrix,   // 👈 ESTA ES LA QUE ARREGLAMOS (Notas + Asistencia)
@@ -16,9 +17,13 @@ import {
 } from "../controllers/teacher";
 
 // 2. IMPORTAMOS LAS FUNCIONES DE CALENDARIO (calendar.ts)
+// Importa las nuevas funciones de calendar.ts
 import {
-  getEvents,
-  createEvent,            // 👈 Esta tiene el fix de teacherId y fechas
+  getMonthAgenda,
+  createPersonalEvent,
+  deletePersonalEvent,
+  getEvents,      // 👈 Asegúrate de importar esto
+  createEvent,     // 👈 Y esto
   deleteEvent
 } from "../controllers/calendar";
 
@@ -30,6 +35,7 @@ router.use(checkJwt);
 // --- RUTAS DASHBOARD Y CURSOS ---
 router.get("/dashboard", getTeacherDashboard);
 router.post("/tutoring", createTutoring);
+router.get("/tutorings", getTutorings);
 router.get("/courses", getTeacherCourses);
 
 // --- RUTAS DE CALIFICACIONES (MATRIZ GENERAL) ---
@@ -50,9 +56,15 @@ router.get("/attendance", getDailyAttendance);
 router.post("/attendance", saveDailyAttendance);
 
 // --- RUTAS DE AGENDA / EVENTOS ---
-router.get("/calendar", getEvents);
-router.post("/calendar", createEvent);
-router.delete("/calendar/:id", deleteEvent);
+// Reemplaza las anteriores de calendar por estas:
+router.get("/calendar", getMonthAgenda); // Obtener todo el mes
+router.post("/calendar/personal", createPersonalEvent); // Crear extracurricular
+router.delete("/calendar/personal/:id", deletePersonalEvent); // Borrar extracurricular
+
+// 2. Eventos Académicos (Lo que usa "Mis Cursos")
+router.get("/events", getEvents);        // 👈 NUEVA RUTA para listar actividades del curso
+router.post("/events", createEvent);     // 👈 NUEVA RUTA para crear tarea/examen
+router.delete("/events/:id", deleteEvent); // (Si tienes deleteEvent impórtalo también)
 
 // --- EXTRA ---
 router.put("/grades", updateStudentGrade);
