@@ -7,7 +7,8 @@ import {
   Bot,
   LogOut,
   X,
-  Users, // 👈 AGREGADO: Ícono para Tutorías
+  Users,
+  Search,
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -35,6 +36,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Inicio', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Mi Calendario', path: '/dashboard/calendar', icon: CalendarDays },
     { label: 'Mis Materias', path: '/dashboard/subjects', icon: BookOpen },
+    { label: 'Buscar Tutorías', path: '/dashboard/tutorings', icon: Search },
     { label: 'Tutor IA', path: '/dashboard/ai-tutor', icon: Bot, highlight: true },
   ];
 
@@ -43,7 +45,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Panel Docente', path: '/teacher/dashboard', icon: LayoutDashboard },
     { label: 'Mis Cursos', path: '/teacher/courses', icon: BookOpen },
     { label: 'Mi Agenda', path: '/teacher/calendar', icon: CalendarDays },
-    { label: 'Tutorías', path: '/teacher/tutorings', icon: Users }, // 👈 NUEVA OPCIÓN
+    { label: 'Tutorías', path: '/teacher/tutorings', icon: Users },
   ];
 
   const menus = isTeacher ? teacherMenus : studentMenus;

@@ -35,6 +35,7 @@ model User {
   tutoringBookings TutoringBooking[]
   activityGrades ActivityGrade[]
   personalEvents PersonalEvent[]
+  externalCourses ExternalCourse[]
 }
 
 model Career {
@@ -258,8 +259,25 @@ model PersonalEvent {
   description String?
   date        DateTime
   
-  teacherId   Int
-  teacher     User     @relation(fields: [teacherId], references: [id])
+  userId   Int
+  user     User     @relation(fields: [userId], references: [id])
 
   createdAt   DateTime @default(now())
+}
+
+// 3. AGREGA EL NUEVO MODELO PARA CURSOS COMPLEMENTARIOS
+model ExternalCourse {
+  id          Int      @id @default(autoincrement())
+  name        String   // Ej: "Curso de Inglés"
+  description String?
+  
+  startTime   String   // "14:00"
+  endTime     String   // "16:00"
+  days        String   // "1,3,5" (Lunes, Miércoles, Viernes)
+  
+  startDate   DateTime // Desde cuándo
+  endDate     DateTime // Hasta cuándo
+
+  studentId   Int
+  student     User     @relation(fields: [studentId], references: [id])
 }
