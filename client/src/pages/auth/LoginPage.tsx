@@ -23,16 +23,18 @@ export const LoginPage = () => {
 
         try {
             const res = await api.post('/auth/login', { email, password });
-            
+
             // Verificamos si la respuesta viene directa o anidada en 'data'
             const data = res.data.data || res.data;
             const { token, user } = data;
-            
+
             // CORRECCIÓN: Llamamos a la función login
             login(token, user);
-            
+
             // Redirección inteligente según rol
-            if (user.role === 'TEACHER' || user.role === 'ADMIN') {
+            if (user.role === 'ADMIN') {
+                navigate('/admin/dashboard');
+            } else if (user.role === 'TEACHER') {
                 navigate('/teacher/dashboard');
             } else {
                 navigate('/dashboard');

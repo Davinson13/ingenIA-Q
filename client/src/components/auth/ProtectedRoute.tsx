@@ -7,21 +7,21 @@ interface Props {
 
 export const ProtectedRoute = ({ allowedRoles }: Props) => {
   const { isAuthenticated, user, token } = useAuthStore();
+  
 
-  // 1. Si no está logueado, al Login
+  // 1. CHEQUEO DE CREDENCIALES
   if (!isAuthenticated || !token) {
     return <Navigate to="/login" replace />;
   }
 
-  // 2. Si tiene el rol incorrecto, redirigir a SU dashboard correspondiente
+  // 2. CHEQUEO DE ROL (Permisos)
   if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    if (user.role === 'TEACHER' || user.role === 'ADMIN') {
-      return <Navigate to="/teacher/dashboard" replace />;
-    }
-    // Por defecto (Estudiantes)
-    return <Navigate to="/dashboard" replace />;
+    // 🔥 CORRECCIÓN: Redirigir a SU propio dashboard según quién sea
+    if (user.role === 'ADMIN') return <Navigate to="/admin/dashboard" replace />;
+    if (user.role === 'TEACHER') return <Navigate to="/teacher/dashboard" replace />;
+    return <Navigate to="/dashboard" replace />; // Default Estudiante
   }
 
-  // 3. Acceso concedido
+  // 3. PASE USTED
   return <Outlet />;
 };

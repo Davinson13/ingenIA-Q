@@ -1,7 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom'; // Quitamos BrowserRouter
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/auth/LoginPage';
 import { MainLayout } from './components/shared/MainLayout';
-// CORRECCIÓN: Importar desde la carpeta shared, no auth
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 
 // Páginas Estudiante
@@ -12,6 +11,8 @@ import { StudentCoursesPage } from './pages/student/StudentCoursesPage';
 import { StudentCourseDetail } from './pages/student/StudentCourseDetail';
 import { StudentTutoringPage } from './pages/student/StudentTutoringPage';
 
+///Guest
+import { GuestSchedulePage } from './pages/guest/GuestSchedulePage';
 
 // Páginas Docente
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
@@ -23,7 +24,12 @@ import { TeacherCourseDetail } from './pages/teacher/TeacherCourseDetail';
 import { TeacherActivityGradePage } from './pages/teacher/TeacherActivityGradePage';
 import { TeacherTutoring } from './pages/teacher/TeacherTutoring';
 
-// Puedes importar las otras páginas cuando las crees realmente
+// 🔥 PÁGINAS ADMIN (NUEVAS IMPORTACIONES)
+import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { AdminPeriodsPage } from './pages/admin/AdminPeriodsPage';
+import { AdminAcademicPage } from './pages/admin/AdminAcademicPage';
+import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+
 
 function App() {
   return (
@@ -47,6 +53,17 @@ function App() {
         </Route>
       </Route>
 
+
+      {/*Guest*/}
+
+      {/* 1. RUTA PÚBLICA */}
+      <Route path="/login" element={<LoginPage />} />
+      {/* 🔥 NUEVA RUTA PARA INVITADOS */}
+      <Route path="/guest" element={<GuestSchedulePage />} />
+
+      {/* Si quieres que sea la principal temporalmente, cambia la redirección del root: */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+
       {/* ======================================================= */}
       {/* 3. AREA DE DOCENTES (Ruta base: /teacher)               */}
       {/* ======================================================= */}
@@ -69,11 +86,17 @@ function App() {
       </Route>
 
       {/* ======================================================= */}
-      {/* 4. AREA DE ADMIN (Ruta base: /admin)                    */}
+      {/* 4. AREA DE ADMIN (ACTUALIZADA)                          */}
       {/* ======================================================= */}
       <Route element={<ProtectedRoute allowedRoles={['ADMIN']} />}>
         <Route path="/admin" element={<MainLayout />}>
-          <Route index element={<div className="p-10">Panel Admin (Próximamente)</div>} />
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+
+          {/* Rutas reales del Admin */}
+          <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="periods" element={<AdminPeriodsPage />} />
+          <Route path="academic" element={<AdminAcademicPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
         </Route>
       </Route>
 
