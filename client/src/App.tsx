@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { LoginPage } from './pages/auth/LoginPage';
 import { MainLayout } from './components/shared/MainLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
+import { VerifyPage } from './pages/auth/VerifyPage';
 
 // Páginas Estudiante
 import { StudentDashboard } from './pages/student/StudentDashboard';
@@ -11,8 +12,6 @@ import { StudentCoursesPage } from './pages/student/StudentCoursesPage';
 import { StudentCourseDetail } from './pages/student/StudentCourseDetail';
 import { StudentTutoringPage } from './pages/student/StudentTutoringPage';
 
-///Guest
-import { GuestSchedulePage } from './pages/guest/GuestSchedulePage';
 
 // Páginas Docente
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
@@ -58,8 +57,7 @@ function App() {
 
       {/* 1. RUTA PÚBLICA */}
       <Route path="/login" element={<LoginPage />} />
-      {/* 🔥 NUEVA RUTA PARA INVITADOS */}
-      <Route path="/guest" element={<GuestSchedulePage />} />
+      <Route path="/verify" element={<VerifyPage />} />
 
       {/* Si quieres que sea la principal temporalmente, cambia la redirección del root: */}
       <Route path="/" element={<Navigate to="/login" replace />} />
