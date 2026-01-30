@@ -9,6 +9,7 @@ import {
   X,
   Users,
   Search,
+  //Settings
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -29,9 +30,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { user, logout } = useAuthStore();
   const location = useLocation();
 
-  const isTeacher = user?.role === 'TEACHER' || user?.role === 'ADMIN';
+  // --- DEFINICIÓN DE MENÚS POR ROL ---
 
-  // MENÚS DE ESTUDIANTE
   const studentMenus: MenuItem[] = [
     { label: 'Inicio', path: '/dashboard', icon: LayoutDashboard },
     { label: 'Mi Calendario', path: '/dashboard/calendar', icon: CalendarDays },
@@ -40,7 +40,6 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Tutor IA', path: '/dashboard/ai-tutor', icon: Bot, highlight: true },
   ];
 
-  // MENÚ DOCENTE (ACTUALIZADO)
   const teacherMenus: MenuItem[] = [
     { label: 'Panel Docente', path: '/teacher/dashboard', icon: LayoutDashboard },
     { label: 'Mis Cursos', path: '/teacher/courses', icon: BookOpen },
@@ -48,28 +47,50 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Tutorías', path: '/teacher/tutorings', icon: Users },
   ];
 
-  const menus = isTeacher ? teacherMenus : studentMenus;
+  const adminMenus: MenuItem[] = [
+    { label: 'Panel Admin', path: '/admin/dashboard', icon: LayoutDashboard },
+    { label: 'Periodos', path: '/admin/periods', icon: CalendarDays },
+    { label: 'Gestión Académica', path: '/admin/academic', icon: BookOpen },
+    { label: 'Usuarios', path: '/admin/users', icon: Users },
+  ];
 
-  // 🎨 CONFIGURACIÓN DE TEMA (FONDO, BORDES Y GRADIENTES)
-  const themeConfig = isTeacher
-    ? {
-      // Docente: Fondo Púrpura muy oscuro
-      sidebarBg: "bg-[#1a1625]",
-      borderColor: "border-purple-900/30",
-      headerBg: "bg-purple-900/10",
-      logoGradient: "from-purple-400 to-pink-400",
-      activeItem: "bg-purple-600 text-white shadow-lg shadow-purple-500/20",
-      badge: "bg-purple-500/20 text-purple-300 border-purple-500/30"
-    }
-    : {
-      // Estudiante: Fondo Slate clásico (Azulado)
+  // SELECCIÓN DE MENÚ SEGÚN ROL
+  let menus = studentMenus;
+  if (user?.role === 'TEACHER') menus = teacherMenus;
+  if (user?.role === 'ADMIN') menus = adminMenus;
+
+  // --- CONFIGURACIÓN DE TEMAS (COLORES) ---
+  const themeMap = {
+    STUDENT: {
       sidebarBg: "bg-slate-900",
       borderColor: "border-slate-800",
       headerBg: "bg-slate-800/50",
       logoGradient: "from-blue-400 to-teal-400",
       activeItem: "bg-blue-600 text-white shadow-lg shadow-blue-500/20",
-      badge: "bg-blue-500/20 text-blue-300 border-blue-500/30"
-    };
+      badge: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+      roleLabel: "Estudiante"
+    },
+    TEACHER: {
+      sidebarBg: "bg-[#1a1625]",
+      borderColor: "border-purple-900/30",
+      headerBg: "bg-purple-900/10",
+      logoGradient: "from-purple-400 to-pink-400",
+      activeItem: "bg-purple-600 text-white shadow-lg shadow-purple-500/20",
+      badge: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+      roleLabel: "Docente"
+    },
+    ADMIN: {
+      sidebarBg: "bg-slate-950",
+      borderColor: "border-emerald-900/30",
+      headerBg: "bg-emerald-900/10",
+      logoGradient: "from-emerald-400 to-cyan-400",
+      activeItem: "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20",
+      badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+      roleLabel: "Administrador"
+    }
+  };
+
+  const themeConfig = themeMap[user?.role || 'STUDENT'];
 
   return (
     <>
@@ -86,8 +107,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       <aside
         className={clsx(
           "fixed left-0 top-0 h-screen w-64 text-white flex flex-col transition-transform duration-300 z-50 shadow-2xl border-r",
-          themeConfig.sidebarBg,   // 👈 AQUI CAMBIA EL FONDO
-          themeConfig.borderColor, // 👈 AQUI CAMBIA EL BORDE
+          themeConfig.sidebarBg,
+          themeConfig.borderColor,
           isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
@@ -99,7 +120,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
               ingenIA-Q
             </h1>
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mt-1">
-              {isTeacher ? 'Portal Docente' : 'Gestión Académica'}
+              {themeConfig.roleLabel}
             </p>
           </div>
 
@@ -114,7 +135,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         {/* Info Usuario */}
         <div className="px-6 py-6">
           <div className={clsx("rounded-xl p-4 border flex items-center gap-3", themeConfig.headerBg, themeConfig.borderColor)}>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${isTeacher ? 'bg-purple-600' : 'bg-blue-600'}`}>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-inner 
+              ${user?.role === 'ADMIN' ? 'bg-emerald-600' : user?.role === 'TEACHER' ? 'bg-purple-600' : 'bg-blue-600'}`}>
               {user?.fullName?.charAt(0).toUpperCase()}
             </div>
             <div className="overflow-hidden">
@@ -123,7 +145,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                 "text-[10px] uppercase font-bold px-2 py-0.5 rounded border mt-1 inline-block",
                 themeConfig.badge
               )}>
-                {user?.role === 'TEACHER' ? 'Docente' : 'Estudiante'}
+                {themeConfig.roleLabel}
               </span>
             </div>
           </div>
@@ -137,15 +159,10 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             // Lógica de activación inteligente
             let isActive = location.pathname === item.path;
 
-            // Mantener activo "Mis Cursos" si estamos dentro de un curso específico
-            if (item.path === '/teacher/courses' && location.pathname.startsWith('/teacher/course/')) {
-              isActive = true;
-            }
-
-            // Mantener activo "Mis Materias" para estudiante si está dentro de una materia
-            if (item.path === '/dashboard/subjects' && location.pathname.startsWith('/dashboard/course/')) {
-              isActive = true;
-            }
+            // Mantener activo el menú padre si estamos en una sub-ruta
+            if (item.path === '/teacher/courses' && location.pathname.startsWith('/teacher/course/')) isActive = true;
+            if (item.path === '/dashboard/subjects' && location.pathname.startsWith('/dashboard/course/')) isActive = true;
+            if (item.path === '/admin/academic' && location.pathname.startsWith('/admin/academic')) isActive = true;
 
             return (
               <Link
@@ -155,10 +172,9 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                 className={clsx(
                   "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium group relative overflow-hidden",
                   isActive
-                    ? themeConfig.activeItem // 👈 CLASE ACTIVA DINÁMICA
-                    : "text-slate-400 hover:bg-white/5 hover:text-white", // Hover genérico suave
+                    ? themeConfig.activeItem
+                    : "text-slate-400 hover:bg-white/5 hover:text-white",
 
-                  // Estilo especial para Tutor IA (highlight)
                   !isActive && item.highlight && "text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/20 hover:shadow-indigo-900/10"
                 )}
               >

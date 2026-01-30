@@ -7,6 +7,8 @@ import { router as careerRouter } from "./routes/career";
 import { router as studentRouter } from "./routes/student";
 import { router as aiRouter } from "./routes/ai"; 
 import { router as teacherRoutes } from "./routes/teacher";
+import { router as adminRouter } from "./routes/admin";
+import { router as guestRouter } from "./routes/guest";
 
 // Inicializar la App
 const app = express();
@@ -26,6 +28,8 @@ app.use("/api/career", careerRouter);
 app.use("/api/student", studentRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/teacher", teacherRoutes);
+app.use("/api/admin", adminRouter);
+app.use("/api/guest", guestRouter);
 
 // 1. Ruta de prueba (Health Check)
 app.get("/api/health", (req, res) => {
