@@ -297,14 +297,22 @@ const CARRERAS_COMPLETAS = [
 async function main() {
   console.log('🌱 Iniciando carga COMPLETA de mallas FICA - ingenIA-Q...');
 
-  // 1. Limpieza de base de datos para evitar duplicados
-  await prisma.enrollment.deleteMany();
+  // 1. LIMPIEZA DE BASE DE DATOS (ORDEN CRÍTICO)
+  // Borramos primero lo que tiene llaves foráneas para evitar errores
+  console.log('🧹 Limpiando base de datos...');
+  await prisma.activityGrade.deleteMany();
+  await prisma.activity.deleteMany();
+  await prisma.attendance.deleteMany();
+  await prisma.tutoringBooking.deleteMany();
+  await prisma.tutoring.deleteMany();
   await prisma.schedule.deleteMany();
+  await prisma.enrollment.deleteMany();
   await prisma.parallel.deleteMany();
   await prisma.subject.deleteMany();
-  await prisma.career.deleteMany();
-  await prisma.user.deleteMany();
   await prisma.academicPeriod.deleteMany();
+  // Borramos usuarios y carreras al final
+  await prisma.user.deleteMany();
+  await prisma.career.deleteMany();
 
   // 2. Crear las Carreras y sus Materias
   for (const careerInfo of CARRERAS_COMPLETAS) {
@@ -332,21 +340,24 @@ async function main() {
       fullName: 'Administrador FICA',
       password: hashedPassword,
       role: 'ADMIN',
+      isVerified: true, // 🔥 OBLIGATORIO
+      provider: 'LOCAL'
     },
   });
   console.log(`👤 Usuario Admin: ${adminUser.email}`);
 
-  // -- DOCENTE (Nuevo Agregado)
+  // -- DOCENTE
   const teacherUser = await prisma.user.create({
     data: {
       email: 'profe@fica.edu.ec',
       fullName: 'Ing. Roberto Dávila',
       password: hashedPassword,
       role: 'TEACHER',
+      isVerified: true, // 🔥 OBLIGATORIO
+      provider: 'LOCAL'
     }
   });
   console.log(`👨‍🏫 Usuario Docente: ${teacherUser.email}`);
-
 
   // -- ESTUDIANTE
   const sistemasCareer = await prisma.career.findFirst({
@@ -359,7 +370,9 @@ async function main() {
       fullName: 'Juan Pérez',
       password: hashedPassword,
       role: 'STUDENT',
-      careerId: sistemasCareer?.id
+      careerId: sistemasCareer?.id,
+      isVerified: true, // 🔥 OBLIGATORIO
+      provider: 'LOCAL'
     },
   });
   console.log(`🎓 Usuario Estudiante: ${studentUser.email}`);
@@ -389,7 +402,7 @@ async function main() {
 
     if (materia.semesterLevel < 3) {
       estado = 'APPROVED';
-      // 🔥 CORRECCIÓN: Nota sobre 20 (Rango 14-20)
+      // 🔥 NOTA SOBRE 20: Genera entre 14.0 y 20.0
       nota = parseFloat((Math.random() * (20 - 14) + 14).toFixed(1));
     } else if (materia.semesterLevel === 3) {
       estado = 'TAKING';
@@ -409,18 +422,18 @@ async function main() {
 
     // B. CREAR HORARIOS Y PARALELOS (Solo para las que está cursando)
     if (estado === 'TAKING') {
-      // Creamos el paralelo y ASIGNAMOS AL DOCENTE CREADO
+      // Creamos el paralelo y ASIGNAMOS AL DOCENTE
       const paralelo = await prisma.parallel.create({
         data: {
           code: 'A',
           subjectId: materia.id,
           periodId: periodoActual.id,
           capacity: 30,
-          teacherId: teacherUser.id // <--- ¡AQUÍ ESTÁ LA MAGIA! Asignamos al Ing. Dávila
+          teacherId: teacherUser.id
         }
       });
 
-      // C. CREAR ESTRUCTURA DE EVALUACIÓN ESTÁTICA
+      // C. CREAR ESTRUCTURA DE EVALUACIÓN ESTÁTICA (SUMA 20 PUNTOS)
       console.log('📊 Creando estructura de evaluación estática...');
 
       await prisma.activity.createMany({
@@ -428,27 +441,28 @@ async function main() {
           {
             name: "Gestión Individual (Talleres/Deberes)",
             type: "INDIVIDUAL",
-            maxScore: 7.0,
+            maxScore: 6.0, // Antes 7
             parallelId: paralelo.id
           },
           {
             name: "Gestión Grupal (Proyectos)",
             type: "GRUPAL",
-            maxScore: 5.0,
+            maxScore: 4.0, // Antes 5
             parallelId: paralelo.id
           },
           {
             name: "Examen Medio Semestre",
             type: "MEDIO",
-            maxScore: 2.0,
+            maxScore: 5.0, // Antes 2 (Muy bajo, subido a 5)
             parallelId: paralelo.id
           },
           {
             name: "Examen Final",
             type: "FINAL",
-            maxScore: 6.0,
+            maxScore: 5.0, // Antes 6 (Ajustado para sumar 20 exactos)
             parallelId: paralelo.id
           }
+          // TOTAL: 6 + 4 + 5 + 5 = 20 PUNTOS
         ]
       });
 
@@ -478,8 +492,7 @@ async function main() {
 main()
   .catch((e) => {
     console.error(e);
-    // 🔥 CORRECCIÓN: Usamos throw en lugar de process.exit(1) para evitar el error de tipos
-    throw e;
+    process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();

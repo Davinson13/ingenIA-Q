@@ -14,23 +14,27 @@ enum Role {
   STUDENT
   TEACHER
   ADMIN
+  GUEST
 }
 
 model User {
   id                  Int          @id @default(autoincrement())
   email               String       @unique
-  password            String
+  password  String?  // Opcional porque con OAuth no hay password
   fullName            String
-  role                Role         @default(STUDENT)
-  createdAt           DateTime     @default(now())
+  role      String   @default("GUEST") // STUDENT, TEACHER, ADMIN, GUEST
   
-  // Relación con Carrera
+  isVerified       Boolean @default(false)
+  verificationCode String? // Código temporal para verificar email
+  provider         String  @default("LOCAL") // LOCAL, GOOGLE, GITHUB
+  createdAt           DateTime     @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relaciónes
   careerId            Int?
   career              Career?      @relation(fields: [careerId], references: [id])
-
   enrollments         Enrollment[]
   teachingAssignments Parallel[]
-
   tutoringsCreated Tutoring[] @relation("TeacherTutorings")
   tutoringBookings TutoringBooking[]
   activityGrades ActivityGrade[]
