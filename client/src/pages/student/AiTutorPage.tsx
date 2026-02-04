@@ -1,188 +1,139 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Eraser } from 'lucide-react';
-import clsx from 'clsx';
-import { useAuthStore } from '../../store/authStore';
-import api from '../../api/axios'; // <--- ASEGÚRATE DE IMPORTAR ESTO ARRIBA
+import api from '../../api/axios';
+import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
-// Tipo de mensaje
 interface Message {
     id: number;
+    sender: 'USER' | 'AI';
     text: string;
-    sender: 'user' | 'ai';
-    timestamp: Date;
 }
 
 export const AiTutorPage = () => {
-    const { user } = useAuthStore();
+    const [messages, setMessages] = useState<Message[]>([
+        { id: 1, sender: 'AI', text: 'Hola 👋 Soy IngenIA. Estoy conectada a tus materias. ¿En qué te ayudo?' }
+    ]);
     const [input, setInput] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
+    const [loading, setLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Estado inicial con un mensaje de bienvenida
-    const [messages, setMessages] = useState<Message[]>([
-        {
-            id: 1,
-            text: `¡Hola ${user?.fullName.split(' ')[0]}! Soy tu Tutor IA de la FICA. 🤖\n\nPuedo ayudarte a repasar temas de tus materias, recordarte tu horario o darte consejos de estudio. ¿En qué trabajamos hoy?`,
-            sender: 'ai',
-            timestamp: new Date()
-        }
-    ]);
-
-    // Auto-scroll al fondo cuando llega un mensaje nuevo
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages, isTyping]);
+    }, [messages]);
 
     const handleSend = async (e?: React.FormEvent) => {
         e?.preventDefault();
-        if (!input.trim()) return;
+        if (!input.trim() || loading) return;
 
-        // 1. Mensaje del Usuario (Visual inmediato)
-        const userMsg: Message = {
-            id: Date.now(),
-            text: input,
-            sender: 'user',
-            timestamp: new Date()
-        };
+        const userMsg = input.trim();
+        setInput(''); 
 
-        setMessages(prev => [...prev, userMsg]);
-        setInput('');
-        setIsTyping(true); // Activar animación
+        // 1. Mensaje Usuario
+        setMessages(prev => [...prev, { id: Date.now(), sender: 'USER', text: userMsg }]);
+        setLoading(true);
 
         try {
-            // 2. LLAMADA REAL AL BACKEND 🚀
-            const { data } = await api.post('/ai/chat', { question: userMsg.text });
-
-            // 3. Agregar respuesta del Backend
-            const aiMsg: Message = {
-                id: Date.now() + 1,
-                text: data.text,
-                sender: 'ai',
-                timestamp: new Date(data.timestamp)
-            };
-
-            setMessages(prev => [...prev, aiMsg]);
+            const res = await api.post('/student/ai-chat', { message: userMsg });
+            setMessages(prev => [...prev, { id: Date.now() + 1, sender: 'AI', text: res.data.reply }]);
         } catch (error) {
-            console.error("Error hablando con la IA", error);
-            // Mensaje de error visual
-            const errorMsg: Message = {
-                id: Date.now() + 1,
-                text: "Lo siento, tuve un problema de conexión. Inténtalo de nuevo. 🔌",
-                sender: 'ai',
-                timestamp: new Date()
-            };
-            setMessages(prev => [...prev, errorMsg]);
+            setMessages(prev => [...prev, { id: Date.now() + 1, sender: 'AI', text: 'Tuve un error de conexión. Intenta de nuevo.' }]);
         } finally {
-            setIsTyping(false); // Apagar animación
+            setLoading(false);
         }
     };
 
     return (
-        <div className="flex flex-col h-[calc(100vh-140px)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-
-            {/* 1. Cabecera del Chat */}
-            <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-lg text-white shadow-lg shadow-purple-200">
-                        <Bot size={24} />
-                    </div>
-                    <div>
-                        <h2 className="font-bold text-slate-800">Tutor Virtual FICA</h2>
-                        <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                            <span className="text-xs text-slate-500 font-medium">En línea</span>
-                        </div>
-                    </div>
+        <div className="flex flex-col h-[calc(100vh-120px)] animate-in fade-in bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+            
+            {/* HEADER */}
+            <div className="bg-gradient-to-r from-violet-600 to-indigo-600 px-6 py-4 flex items-center gap-3 text-white shadow-md z-10 shrink-0">
+                <div className="bg-white/20 p-2 rounded-full backdrop-blur-md">
+                    <Sparkles size={20} className="text-yellow-300" />
                 </div>
-
-                <button
-                    onClick={() => setMessages([])} // Limpiar chat (opcional)
-                    className="text-slate-400 hover:text-red-500 transition-colors p-2"
-                    title="Borrar historial"
-                >
-                    <Eraser size={20} />
-                </button>
+                <div>
+                    <h2 className="font-bold text-base leading-tight">Tutor Académico</h2>
+                    <p className="text-violet-200 text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Online
+                    </p>
+                </div>
             </div>
 
-            {/* 2. Área de Mensajes */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
+            {/* ÁREA DE MENSAJES */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-50 scroll-smooth">
                 {messages.map((msg) => (
-                    <div
-                        key={msg.id}
-                        className={clsx(
-                            "flex gap-4 max-w-[80%]",
-                            msg.sender === 'user' ? "ml-auto flex-row-reverse" : ""
-                        )}
-                    >
-                        {/* Avatar */}
-                        <div className={clsx(
-                            "w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1",
-                            msg.sender === 'user' ? "bg-blue-100 text-blue-600" : "bg-purple-100 text-purple-600"
-                        )}>
-                            {msg.sender === 'user' ? <User size={16} /> : <Sparkles size={16} />}
-                        </div>
+                    <div key={msg.id} className={`flex ${msg.sender === 'USER' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`flex gap-3 max-w-[85%] md:max-w-[75%] ${msg.sender === 'USER' ? 'flex-row-reverse' : 'flex-row'}`}>
+                            
+                            {/* Avatar */}
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm mt-1 ${msg.sender === 'USER' ? 'bg-slate-800' : 'bg-violet-600'}`}>
+                                {msg.sender === 'USER' ? <User size={14} className="text-white"/> : <Bot size={14} className="text-white"/>}
+                            </div>
 
-                        {/* Burbuja de Texto */}
-                        <div className={clsx(
-                            "p-4 rounded-2xl text-sm leading-relaxed shadow-sm",
-                            msg.sender === 'user'
-                                ? "bg-blue-600 text-white rounded-tr-none"
-                                : "bg-white border border-slate-200 text-slate-700 rounded-tl-none"
-                        )}>
-                            <p className="whitespace-pre-wrap">{msg.text}</p>
-                            <p className={clsx(
-                                "text-[10px] mt-2 text-right opacity-70",
-                                msg.sender === 'user' ? "text-blue-100" : "text-slate-400"
-                            )}>
-                                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </p>
+                            {/* Burbuja de Texto */}
+                            <div className={`px-4 py-3 rounded-2xl text-sm shadow-sm leading-relaxed overflow-hidden ${
+                                msg.sender === 'USER' 
+                                    ? 'bg-slate-800 text-white rounded-tr-none' 
+                                    : 'bg-white text-slate-700 border border-slate-200 rounded-tl-none'
+                            }`}>
+                                {msg.sender === 'USER' ? (
+                                    <p>{msg.text}</p>
+                                ) : (
+                                    /* 🔥 CORRECCIÓN: Quitamos className de ReactMarkdown y usamos un div envolvente */
+                                    <div className="markdown-content space-y-2">
+                                        <ReactMarkdown 
+                                            components={{
+                                                strong: ({node, ...props}) => <span className="font-bold text-violet-700" {...props} />,
+                                                ul: ({node, ...props}) => <ul className="list-disc pl-4 space-y-1" {...props} />,
+                                                ol: ({node, ...props}) => <ol className="list-decimal pl-4 space-y-1" {...props} />,
+                                                li: ({node, ...props}) => <li className="marker:text-violet-400" {...props} />,
+                                                p: ({node, ...props}) => <p className="mb-1 last:mb-0" {...props} />,
+                                            }}
+                                        >
+                                            {msg.text}
+                                        </ReactMarkdown>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ))}
-
-                {/* Indicador de "Escribiendo..." */}
-                {isTyping && (
-                    <div className="flex gap-4 max-w-[80%]">
-                        <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-                            <Sparkles size={16} />
-                        </div>
-                        <div className="bg-white border border-slate-200 p-4 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-1">
-                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></span>
-                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-75"></span>
-                            <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce delay-150"></span>
+                
+                {loading && (
+                    <div className="flex justify-start pl-11">
+                        <div className="bg-white px-4 py-3 rounded-2xl rounded-tl-none border border-slate-200 flex items-center gap-2 shadow-sm">
+                            <Loader2 size={14} className="text-violet-500 animate-spin"/>
+                            <span className="text-xs text-slate-400 font-medium">Escribiendo...</span>
                         </div>
                     </div>
                 )}
+                
                 <div ref={messagesEndRef} />
             </div>
 
-            {/* 3. Área de Input */}
-            <div className="p-4 bg-white border-t border-slate-100">
-                <form
-                    onSubmit={handleSend}
-                    className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-400 transition-all"
-                >
-                    <input
-                        type="text"
+            {/* INPUT */}
+            <form onSubmit={handleSend} className="p-4 bg-white border-t border-slate-200 shrink-0">
+                <div className="relative flex items-center gap-2 max-w-4xl mx-auto">
+                    <input 
+                        type="text" 
+                        placeholder="Escribe tu duda aquí..." 
+                        className="w-full pl-5 pr-14 py-4 bg-slate-100 border-none rounded-2xl outline-none focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all text-slate-700 font-medium placeholder:text-slate-400"
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Escribe tu pregunta sobre cálculo, programación, horarios..."
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-slate-700 placeholder-slate-400 outline-none py-2"
+                        disabled={loading}
                     />
-                    <button
-                        type="submit"
-                        disabled={!input.trim() || isTyping}
-                        className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    <button 
+                        type="submit" 
+                        disabled={!input.trim() || loading}
+                        className="absolute right-2 p-2.5 bg-violet-600 text-white rounded-xl hover:bg-violet-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-md active:scale-95"
                     >
-                        <Send size={18} />
+                        <Send size={18} className={input.trim() && !loading ? '-ml-0.5' : ''} />
                     </button>
-                </form>
-            </div>
-
+                </div>
+            </form>
         </div>
     );
 };
