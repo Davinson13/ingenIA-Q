@@ -3,8 +3,7 @@ import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
 import {
     Calendar, Plus, Clock,
-    AlertCircle, Search, Trash2, Edit
-    // CheckCircle2 ELIMINADO
+    AlertCircle, Search, Trash2, Edit,
 } from 'lucide-react';
 
 interface Period {
@@ -18,8 +17,12 @@ interface Period {
 export const AdminPeriodsPage = () => {
     const theme = getTheme('ADMIN');
     const [periods, setPeriods] = useState<Period[]>([]);
+    
+    // Estados del Modal
     const [showModal, setShowModal] = useState(false);
-    const [form, setForm] = useState({ name: '', startDate: '', endDate: '' });
+    const [isEditing, setIsEditing] = useState(false);
+    const [form, setForm] = useState({ id: 0, name: '', startDate: '', endDate: '' });
+    
     const [loading, setLoading] = useState(true);
 
     const fetchPeriods = async () => {
@@ -35,26 +38,63 @@ export const AdminPeriodsPage = () => {
 
     useEffect(() => { fetchPeriods(); }, []);
 
-    const handleCreate = async (e: React.FormEvent) => {
+    // ABRIR MODAL PARA CREAR
+    const openCreate = () => {
+        setForm({ id: 0, name: '', startDate: '', endDate: '' });
+        setIsEditing(false);
+        setShowModal(true);
+    };
+
+    // ABRIR MODAL PARA EDITAR
+    const openEdit = (p: Period) => {
+        setForm({
+            id: p.id,
+            name: p.name,
+            startDate: p.startDate.split('T')[0], // Formato YYYY-MM-DD
+            endDate: p.endDate.split('T')[0]
+        });
+        setIsEditing(true);
+        setShowModal(true);
+    };
+
+    // GUARDAR (CREAR O EDITAR)
+    const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await api.post('/admin/periods', form);
-            alert("✅ Periodo creado con éxito");
+            if (isEditing) {
+                await api.put(`/admin/period/data/${form.id}`, form);
+                alert("✅ Periodo actualizado con éxito");
+            } else {
+                await api.post('/admin/period', form);
+                alert("✅ Periodo creado con éxito");
+            }
             setShowModal(false);
-            setForm({ name: '', startDate: '', endDate: '' });
             fetchPeriods();
         } catch {
-            alert("❌ Error al crear periodo");
+            alert("❌ Error al guardar periodo");
         }
     };
 
+    // CAMBIAR ESTADO (ACTIVO/INACTIVO)
     const toggleStatus = async (id: number) => {
         if (!confirm("¿Cambiar estado del periodo? (Esto desactivará otros periodos activos)")) return;
         try {
-            await api.put(`/admin/periods/${id}/toggle`);
+            await api.put(`/admin/period/${id}`);
             fetchPeriods();
         } catch {
             alert("Error al cambiar estado");
+        }
+    };
+
+    // ELIMINAR PERIODO
+    const handleDelete = async (id: number) => {
+        if (!confirm("⚠️ ¿Seguro de eliminar este periodo? No debe tener cursos asociados.")) return;
+        try {
+            await api.delete(`/admin/period/${id}`);
+            alert("🗑️ Periodo eliminado");
+            fetchPeriods();
+        } catch (error: any) {
+            alert(error.response?.data?.error || "Error al eliminar");
         }
     };
 
@@ -91,7 +131,7 @@ export const AdminPeriodsPage = () => {
                     />
                 </div>
                 <button
-                    onClick={() => setShowModal(true)}
+                    onClick={openCreate}
                     className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all transform hover:scale-105 active:scale-95"
                 >
                     <Plus size={20} /> Nuevo Periodo
@@ -160,8 +200,20 @@ export const AdminPeriodsPage = () => {
                                             >
                                                 {p.isActive ? 'Desactivar' : 'Activar'}
                                             </button>
-                                            <button className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors"><Edit size={16} /></button>
-                                            <button className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                                            <button 
+                                                onClick={() => openEdit(p)}
+                                                className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition-colors" 
+                                                title="Editar"
+                                            >
+                                                <Edit size={16} />
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDelete(p.id)}
+                                                className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition-colors" 
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -171,7 +223,7 @@ export const AdminPeriodsPage = () => {
                 </div>
             </div>
 
-            {/* MODAL CREAR (Estilizado) */}
+            {/* MODAL CREAR / EDITAR */}
             {showModal && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in zoom-in duration-200">
                     <div className="bg-white p-8 rounded-3xl w-full max-w-md shadow-2xl relative overflow-hidden">
@@ -181,11 +233,11 @@ export const AdminPeriodsPage = () => {
                             <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 mb-4">
                                 <Plus size={24} />
                             </div>
-                            <h2 className="text-2xl font-black text-slate-800">Nuevo Periodo</h2>
-                            <p className="text-slate-500 text-sm">Define un nuevo ciclo académico para el sistema.</p>
+                            <h2 className="text-2xl font-black text-slate-800">{isEditing ? 'Editar Periodo' : 'Nuevo Periodo'}</h2>
+                            <p className="text-slate-500 text-sm">Define un ciclo académico para el sistema.</p>
                         </div>
 
-                        <form onSubmit={handleCreate} className="space-y-5">
+                        <form onSubmit={handleSave} className="space-y-5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1 ml-1">Nombre del Periodo</label>
                                 <input
@@ -232,7 +284,7 @@ export const AdminPeriodsPage = () => {
                                     type="submit"
                                     className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-600/30"
                                 >
-                                    Crear Periodo
+                                    {isEditing ? 'Guardar Cambios' : 'Crear Periodo'}
                                 </button>
                             </div>
                         </form>

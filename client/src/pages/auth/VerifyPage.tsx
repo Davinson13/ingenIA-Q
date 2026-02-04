@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import api from '../../api/axios';
+import axios from 'axios'; // 👈 1. IMPORTAR AXIOS
 import { CheckCircle2, XCircle, Loader2, ArrowRight } from 'lucide-react';
 
 export const VerifyPage = () => {
@@ -22,16 +23,27 @@ export const VerifyPage = () => {
             }
 
             try {
-                // Llamada al endpoint backend que creamos
+                // Llamada al endpoint backend
                 await api.post('/auth/verify', { email, code });
                 setStatus('SUCCESS');
-            } catch (error: any) {
+                
+            } catch (error: unknown) { // 👈 2. CAMBIAR ANY POR UNKNOWN
                 setStatus('ERROR');
-                setMessage(error.response?.data || "El código ha expirado o es incorrecto.");
+                
+                // 3. VERIFICACIÓN DE TIPO SEGURA
+                if (axios.isAxiosError(error) && error.response?.data) {
+                    // Si el backend devuelve un mensaje de error específico (string u objeto)
+                    const errorData = error.response.data;
+                    // Aseguramos que sea un string para mostrarlo
+                    setMessage(typeof errorData === 'string' ? errorData : JSON.stringify(errorData));
+                } else {
+                    // Error genérico si no es de Axios o no hay respuesta
+                    setMessage("El código ha expirado o es incorrecto.");
+                }
             }
         };
 
-        // Pequeño delay para que no sea instantáneo (UX)
+        // Pequeño delay para UX
         setTimeout(() => verifyAccount(), 1500);
     }, [searchParams]);
 
@@ -71,7 +83,7 @@ export const VerifyPage = () => {
                             <XCircle size={40} className="text-red-600" />
                         </div>
                         <h2 className="text-2xl font-black text-slate-800 mb-2">Error de Verificación</h2>
-                        <p className="text-slate-500 mb-8 max-w-[250px] mx-auto">
+                        <p className="text-slate-500 mb-8 max-w-[250px] mx-auto text-sm break-words">
                             {message}
                         </p>
                         <button 

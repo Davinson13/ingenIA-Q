@@ -1,11 +1,11 @@
-import { useEffect, useState, useCallback } from 'react'; // 👈 Eliminado "React" para evitar el warning
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
 import {
     ArrowLeft, Calendar, Clock, TrendingUp, FileText,
     CircleCheck, CircleX, CircleAlert,
-    ExternalLink, Send, BookOpen, MessageSquare, Percent
+    ExternalLink, Send, BookOpen, MessageSquare, Percent, LogOut // 👈 Importamos LogOut
 } from 'lucide-react';
 
 // --- UTILIDAD: FORMATO DE FECHA UTC ---
@@ -129,9 +129,24 @@ export const StudentCourseDetail = () => {
         setShowModal(true);
     };
 
+    // 🔥 FUNCIÓN PARA SALIR DEL CURSO
+    const handleLeaveCourse = async () => {
+        if (!confirm("⚠️ ¿Seguro que quieres salir de este curso?\nPerderás tu progreso y notas.")) return;
+
+        try {
+            // id viene de useParams()
+            await api.delete(`/student/enroll/${id}`);
+
+            alert("Te has dado de baja correctamente.");
+            navigate('/dashboard/subjects'); // Redirigir a mis materias
+        } catch (error: any) {
+            console.error(error);
+            alert(error.response?.data?.error || "Error al salir del curso");
+        }
+    };
+
     // 🔥 EFECTO CORREGIDO (SIN ANY)
     useEffect(() => {
-        // Hacemos un "cast" seguro a nuestra interfaz LocationState
         const state = location.state as LocationState;
 
         if (data && state && state.activityId) {
@@ -170,7 +185,19 @@ export const StudentCourseDetail = () => {
         <div className="space-y-6 animate-in fade-in duration-500 pb-20">
             {/* HEADER */}
             <div className={`text-white p-8 rounded-b-3xl shadow-lg relative overflow-hidden mb-8 -mx-4 sm:mx-0 sm:rounded-2xl bg-gradient-to-r ${theme.gradient}`}>
-                <button onClick={() => navigate('/dashboard')} className="flex items-center text-white/80 hover:text-white transition-colors mb-4 z-10 relative"><ArrowLeft size={18} className="mr-2" /> Volver al Dashboard</button>
+
+                <div className="flex justify-between items-start z-10 relative">
+                    <button onClick={() => navigate('/dashboard')} className="flex items-center text-white/80 hover:text-white transition-colors mb-4"><ArrowLeft size={18} className="mr-2" /> Volver al Dashboard</button>
+
+                    {/* 🔥 BOTÓN SALIR DEL CURSO */}
+                    <button
+                        onClick={handleLeaveCourse}
+                        className="bg-red-500/20 hover:bg-red-500/40 text-red-100 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border border-red-400/30 transition-all"
+                    >
+                        <LogOut size={14} /> Salir del Curso
+                    </button>
+                </div>
+
                 <div className="relative z-10">
                     <h1 className="text-3xl font-bold">{data.subjectName}</h1>
                     <p className="text-white/80 mt-1 flex items-center gap-2"><BookOpen size={16} /> Paralelo {data.parallelCode}</p>
@@ -207,6 +234,8 @@ export const StudentCourseDetail = () => {
                                     {act.myScore !== null ? <div className="flex flex-col items-end"><span className={`text-3xl font-black ${theme.text}`}>{Number(act.myScore).toFixed(2)}</span><span className="text-xs text-slate-400 font-bold">/ 20</span></div> : <div className="text-sm text-slate-300 font-bold italic">-- / 20</div>}
                                 </div>
                             </div>
+
+
                             <p className="text-sm text-slate-600 mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">{act.description || "Sin descripción."}</p>
                             {act.feedback && <div className={`mb-4 ${theme.secondary} border ${theme.border} p-3 rounded-lg`}><div className="flex items-center gap-2 mb-1"><MessageSquare size={14} className={theme.text} /><span className={`text-xs font-bold ${theme.text} uppercase`}>Comentario:</span></div><p className={`text-sm ${theme.text} opacity-90 italic`}>"{act.feedback}"</p></div>}
                             <div className="flex flex-wrap gap-3 pt-2 border-t border-slate-100">

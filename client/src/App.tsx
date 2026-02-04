@@ -3,6 +3,7 @@ import { LoginPage } from './pages/auth/LoginPage';
 import { MainLayout } from './components/shared/MainLayout';
 import { ProtectedRoute } from './components/shared/ProtectedRoute';
 import { VerifyPage } from './pages/auth/VerifyPage';
+import { ProfilePage } from './pages/shared/ProfilePage';
 
 // Páginas Estudiante
 import { StudentDashboard } from './pages/student/StudentDashboard';
@@ -11,7 +12,9 @@ import { AiTutorPage } from './pages/student/AiTutorPage';
 import { StudentCoursesPage } from './pages/student/StudentCoursesPage';
 import { StudentCourseDetail } from './pages/student/StudentCourseDetail';
 import { StudentTutoringPage } from './pages/student/StudentTutoringPage';
-
+import { CatalogPage } from './pages/student/CatalogPage';
+import { StudentHistoryPage } from './pages/student/StudentHistoryPage';
+import { StudentMeshPage } from './pages/student/StudentMeshPage';
 
 // Páginas Docente
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
@@ -49,6 +52,10 @@ function App() {
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-tutor" element={<AiTutorPage />} />
           <Route path="/dashboard/tutorings" element={<StudentTutoringPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+          <Route path="history" element={<StudentHistoryPage />} />
+          <Route path="mesh" element={<StudentMeshPage />} />
+          <Route path="catalog" element={<CatalogPage />} />
         </Route>
       </Route>
 
@@ -77,8 +84,10 @@ function App() {
           <Route path="attendance" element={<TeacherAttendancePage />} />
           <Route path="calendar" element={<TeacherCalendar />} />
           <Route path="/teacher/course/:courseId/activity/:activityId/grade" element={<TeacherActivityGradePage />} />
+          <Route path="profile" element={<ProfilePage />} />
           <Route
             path="/teacher/tutorings" element={<TeacherTutoring />}
+
           />
         </Route>
       </Route>
@@ -95,6 +104,7 @@ function App() {
           <Route path="periods" element={<AdminPeriodsPage />} />
           <Route path="academic" element={<AdminAcademicPage />} />
           <Route path="users" element={<AdminUsersPage />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Route>
 

@@ -13,7 +13,8 @@ import {
   saveActivityGrade,      // Guardar nota
   getDailyAttendance,     // Asistencia (lectura)
   saveDailyAttendance,    // Asistencia (guardado con fix de fecha)
-  updateStudentGrade      // Actualizar nota final (si se usa)
+  updateStudentGrade,     // Actualizar nota final (si se usa)
+  removeStudent
 } from "../controllers/teacher";
 
 // 2. IMPORTAMOS LAS FUNCIONES DE CALENDARIO (calendar.ts)
@@ -37,6 +38,8 @@ router.get("/dashboard", getTeacherDashboard);
 router.post("/tutoring", createTutoring);
 router.get("/tutorings", getTutorings);
 router.get("/courses", getTeacherCourses);
+// 🔥 Nueva ruta para expulsar (recibe datos en el body)
+router.delete("/student", checkJwt, removeStudent);
 
 // --- RUTAS DE CALIFICACIONES (MATRIZ GENERAL) ---
 // Esta obtiene el nombre del curso para el header

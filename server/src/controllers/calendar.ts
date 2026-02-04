@@ -143,9 +143,10 @@ const deleteEvent = async (req: RequestWithUser, res: Response) => {
   }
 };
 
+// 🔥 AGENDA DOCENTE MENSUAL (CORREGIDA CON FILTRO DE PERIODO)
 const getMonthAgenda = async (req: RequestWithUser, res: Response) => {
   try {
-    const teacherId = req.user.id;
+    const teacherId = parseInt(String(req.user.id));
     const { month, year } = req.query;
 
     const targetMonth = parseInt(String(month));
@@ -154,16 +155,24 @@ const getMonthAgenda = async (req: RequestWithUser, res: Response) => {
     const startDate = new Date(targetYear, targetMonth, 1);
     const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
 
-    // 1. Académicos
+    // 1. BUSCAR PERIODO ACTIVO (CRÍTICO)
+    const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
+    if (!activePeriod) return res.send([]); // Si no hay periodo, agenda vacía
+
+    // 2. Académicos (Solo de cursos activos)
     const academicEvents = await prisma.event.findMany({
       where: {
-        parallel: { teacherId: teacherId },
+        parallel: { 
+            teacherId: teacherId,
+            periodId: activePeriod.id // 🔥 FILTRO
+        },
         date: { gte: startDate, lte: endDate }
       },
       include: { parallel: { include: { subject: true } } }
     });
 
-    // 2. Tutorías
+    // 3. Tutorías
     const tutorings = await prisma.tutoring.findMany({
       where: {
         teacherId: teacherId,
@@ -172,7 +181,7 @@ const getMonthAgenda = async (req: RequestWithUser, res: Response) => {
       include: { subject: true }
     });
 
-    // 3. Personales
+    // 4. Personales
     const personalEvents = await prisma.personalEvent.findMany({
       where: {
         userId: teacherId,
@@ -180,9 +189,14 @@ const getMonthAgenda = async (req: RequestWithUser, res: Response) => {
       }
     });
 
-    // 4. Clases Recurrentes
+    // 5. Clases Recurrentes (Solo de cursos activos)
     const schedules = await prisma.schedule.findMany({
-      where: { parallel: { teacherId: teacherId } },
+      where: { 
+          parallel: { 
+              teacherId: teacherId,
+              periodId: activePeriod.id // 🔥 FILTRO
+          } 
+      },
       include: { parallel: { include: { subject: true } } }
     });
 
@@ -253,7 +267,7 @@ const getMonthAgenda = async (req: RequestWithUser, res: Response) => {
 
 const getStudentAgenda = async (req: RequestWithUser, res: Response) => {
   try {
-    const studentId = req.user.id;
+    const studentId = parseInt(String(req.user.id));
     const { month, year } = req.query;
 
     const targetMonth = parseInt(String(month));
@@ -262,32 +276,38 @@ const getStudentAgenda = async (req: RequestWithUser, res: Response) => {
     const startDate = new Date(targetYear, targetMonth, 1);
     const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
 
-    // 1. MIS CLASES (Inscripciones)
-    // 🔥 CORRECCIÓN: Quitamos 'events: true' dentro de subject, ya que no existe esa relación directa
+    // 1. BUSCAR PERIODO ACTIVO (CRÍTICO)
+    const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
+    if (!activePeriod) return res.send([]); // Si no hay periodo, agenda vacía
+
+    // 2. MIS CLASES (Inscripciones DEL PERIODO ACTIVO)
     const enrollments = await prisma.enrollment.findMany({
       where: {
         userId: studentId,
-        status: { in: ['TAKING', 'PENDING', 'APPROVED'] }
+        status: { in: ['TAKING', 'PENDING'] },
+        parallel: { periodId: activePeriod.id } // 🔥 FILTRO CLAVE
       },
       include: {
         parallel: { include: { subject: true, schedules: true } },
         subject: {
           include: {
-            parallels: { include: { schedules: true } } // Solo traemos paralelos para backup
+            parallels: { 
+                where: { periodId: activePeriod.id }, // 🔥 Filtro backup
+                include: { schedules: true } 
+            }
           }
         }
       }
     });
 
-    // 2. ACTIVIDADES ACADÉMICAS
+    // 3. ACTIVIDADES ACADÉMICAS
     const validParallelIds: number[] = [];
 
-    // 🔥 CORRECCIÓN: Usamos (enr: any) para que TS no se queje de propiedades anidadas
     enrollments.forEach((enr: any) => {
       if (enr.parallelId) {
         validParallelIds.push(enr.parallelId);
       } else if (enr.subject && enr.subject.parallels.length > 0) {
-        // Si no tiene paralelo asignado, miramos todos los paralelos de la materia
         enr.subject.parallels.forEach((p: any) => validParallelIds.push(p.id));
       }
     });
@@ -300,18 +320,18 @@ const getStudentAgenda = async (req: RequestWithUser, res: Response) => {
       include: { parallel: { include: { subject: true } } }
     });
 
-    // 3. MIS TUTORÍAS (Reservadas)
+    // 4. MIS TUTORÍAS (Reservadas)
     const myTutorings = await prisma.tutoringBooking.findMany({
       where: { studentId: studentId },
       include: { tutoring: { include: { subject: true } } }
     });
 
-    // 4. PERSONALES
+    // 5. PERSONALES
     const personalEvents = await prisma.personalEvent.findMany({
       where: { userId: studentId, date: { gte: startDate, lte: endDate } }
     });
 
-    // 5. CURSOS COMPLEMENTARIOS
+    // 6. CURSOS COMPLEMENTARIOS
     const externalCourses = await prisma.externalCourse.findMany({
       where: { studentId: studentId }
     });
@@ -426,17 +446,15 @@ const getStudentAgenda = async (req: RequestWithUser, res: Response) => {
 // 🟢 6. CREAR CURSO COMPLEMENTARIO (VALIDADO)
 const createExternalCourse = async (req: RequestWithUser, res: Response) => {
   try {
-    const studentId = req.user.id;
+    const studentId = parseInt(String(req.user.id));
     const { name, startTime, endTime, days, startDate, endDate } = req.body;
 
     // 1. Validar fechas de inicio
     const start = new Date(startDate);
     const end = new Date(endDate);
     const today = new Date();
-    today.setHours(0, 0, 0, 0); // Comparamos solo fecha, sin hora
+    today.setHours(0, 0, 0, 0); 
 
-    // Ajuste zona horaria simple: sumamos 5 horas para compensar si viene en UTC 
-    // (o usamos comparación de string YYYY-MM-DD para ser más seguros)
     const startString = startDate;
     const todayString = today.toISOString().split('T')[0];
 
