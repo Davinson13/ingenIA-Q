@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
-import { encrypt, compare } from "../utils/handlePassword"; // 👈 Usamos compare
+import { encrypt, compare } from "../utils/handlePassword";
 import { tokenSign } from "../utils/handleJwt";
 import nodemailer from "nodemailer";
 
@@ -177,5 +177,27 @@ export const oauthLoginCtrl = async (req: Request, res: Response) => {
   } catch (e) {
     console.error(e);
     res.status(500).send("ERROR_OAUTH");
+  }
+};
+
+// 🔥 5. GET ME (DATOS DE SESIÓN) - ESTA ES LA CLAVE 🔥
+// Esta función se llama cada vez que recargas la página para ver quién eres.
+export const getMe = async (req: any, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      include: {
+        career: true // ✅ AQUÍ ESTÁ LA MAGIA: Incluye la carrera en la respuesta
+      }
+    });
+
+    if (!user) return res.status(404).send("Usuario no encontrado");
+
+    const { password, verificationCode, ...userSafe } = user;
+    res.send({ user: userSafe });
+
+  } catch (error) {
+    console.error("Error en getMe:", error);
+    res.status(500).send("ERROR_GET_ME");
   }
 };

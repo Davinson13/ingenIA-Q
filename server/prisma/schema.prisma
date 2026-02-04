@@ -33,6 +33,7 @@ model User {
   // Relaciónes
   careerId            Int?
   career              Career?      @relation(fields: [careerId], references: [id])
+  currentSemester Int?     // Ej: 4
   enrollments         Enrollment[]
   teachingAssignments Parallel[]
   tutoringsCreated Tutoring[] @relation("TeacherTutorings")
@@ -40,6 +41,7 @@ model User {
   activityGrades ActivityGrade[]
   personalEvents PersonalEvent[]
   externalCourses ExternalCourse[]
+  requestingCareer Boolean  @default(false)
 }
 
 model Career {

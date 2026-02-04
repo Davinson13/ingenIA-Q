@@ -7,6 +7,7 @@ interface User {
   email: string;
   role: 'STUDENT' | 'TEACHER' | 'ADMIN';
   careerId?: number;
+  provider?: string;
 }
 
 interface AuthState {

@@ -5,34 +5,34 @@ const prisma = new PrismaClient();
 
 // Definimos una interfaz para extender la Request
 interface RequestWithUser extends Request {
-  user?: any; 
+  user?: any;
 }
 
 const getMyCareerPlan = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id; 
+    const userId = req.user.id;
 
     // Validación de seguridad extra
     if (!userId) {
-        console.error("❌ Error: ID de usuario no encontrado en el token.");
-        res.status(401).send("TOKEN_INVALIDO");
-        return;
+      console.error("❌ Error: ID de usuario no encontrado en el token.");
+      res.status(401).send("TOKEN_INVALIDO");
+      return;
     }
 
     // 2. Buscar al usuario y su carrera
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      include: { career: true } 
+      include: { career: true }
     });
 
     if (!user) {
-        res.status(404).send("USUARIO_NO_ENCONTRADO");
-        return;
+      res.status(404).send("USUARIO_NO_ENCONTRADO");
+      return;
     }
 
     if (!user.careerId || !user.career) {
       res.status(404).send("USUARIO_SIN_CARRERA_ASIGNADA");
-      return; 
+      return;
     }
 
     // 3. Buscar todas las materias Y el estado para ESTE usuario
@@ -49,7 +49,7 @@ const getMyCareerPlan = async (req: RequestWithUser, res: Response) => {
 
     // 4. Procesar datos para el frontend
     const subjectsWithStatus = subjects.map(s => {
-      const enrollment = s.enrollments[0]; 
+      const enrollment = s.enrollments[0];
       return {
         id: s.id,
         name: s.name,

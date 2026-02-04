@@ -7,7 +7,14 @@ import {
   submitActivity,
   getAvailableTutorings,
   bookTutoring,
-  getStudentDashboard
+  getStudentDashboard,
+  getAllCourses,
+  enrollCourse,
+  leaveCourse,
+  getCatalogFilters, 
+  getOpenCourses,
+  registerHistoricalGrades,
+  requestCareer
 } from "../controllers/student";
 
 import {
@@ -43,5 +50,18 @@ router.post("/calendar/external", createExternalCourse); // Curso complementario
 
 router.get("/tutorings/available", getAvailableTutorings); // Ver lista
 router.post("/tutorings/book", bookTutoring);              // Reservar
+
+// 🔥 NUEVAS RUTAS DE GESTIÓN ACADÉMICA
+//router.get("/catalog", checkJwt, getAllCourses);       // Ver todo
+// 👇 ESTA ES LA RUTA QUE FALTABA (EL 404) 👇
+router.get("/catalog/all", checkJwt, getAllCourses);
+router.post("/enroll", checkJwt, enrollCourse);        // Inscribirse
+router.delete("/enroll/:subjectId", checkJwt, leaveCourse); // Salir
+
+router.post("/history/register", checkJwt, registerHistoricalGrades);
+
+router.get("/catalog/filters", checkJwt, getCatalogFilters); // Filtros (Carreras)
+router.get("/catalog/courses", checkJwt, getOpenCourses);    // Cursos filtrados
+router.post('/request-career', checkJwt, requestCareer)
 
 export { router };

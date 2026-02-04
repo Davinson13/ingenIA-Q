@@ -9,11 +9,10 @@ import {
 } from 'lucide-react';
 import { AxiosError } from 'axios';
 
-// --- UTILIDAD: FORMATO DE FECHA UTC (Para arreglar el error visual de "ayer") ---
+// --- UTILIDAD: FORMATO DE FECHA UTC ---
 const formatDateUTC = (dateString: string) => {
     if (!dateString) return "";
     const date = new Date(dateString);
-    // Usamos getUTC para leer el dato puro del servidor
     const day = String(date.getUTCDate()).padStart(2, '0');
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const year = date.getUTCFullYear();
@@ -46,7 +45,6 @@ interface GradeBreakdown {
     FINAL: number;
 }
 
-// Lo que usamos en el estado
 interface StudentGradeRow {
     studentId: number;
     fullName: string;
@@ -65,7 +63,6 @@ interface ApiGradeStudent {
     breakdown: GradeBreakdown;
 }
 
-// Lo que devuelve el backend en /attendance
 interface ApiAttendanceRecord {
     enrollmentId: number;
     studentId: number;
@@ -74,9 +71,7 @@ interface ApiAttendanceRecord {
     status?: string;
 }
 
-
-
-// Fecha local YYYY-MM-DD para el input type="date"
+// Fecha local YYYY-MM-DD
 const getTodayLocalString = () => {
     const now = new Date();
     const year = now.getFullYear();
@@ -126,7 +121,7 @@ export const TeacherCourseDetail = () => {
         loadCourseInfo();
     }, [id]);
 
-    // --- 2. FUNCIÓN FETCH GRADES (ACTUALIZADA) ---
+    // --- 2. FUNCIÓN FETCH GRADES ---
     const fetchGrades = useCallback(async () => {
         if (!id) return;
         try {
@@ -139,16 +134,13 @@ export const TeacherCourseDetail = () => {
                 avatar: s.avatar,
                 finalTotal: s.finalTotal || 0,
                 attendancePct: s.attendancePct || 100,
-                // Mapeamos el desglose, poniendo 0 si falta algún dato
                 breakdown: s.breakdown || { INDIVIDUAL: 0, GRUPAL: 0, MEDIO: 0, FINAL: 0 }
             }));
 
             setGradeMatrix(processedStudents);
 
-            // 🔥 CÁLCULO DE ESTADÍSTICAS (Cards Superiores)
-            // Regla: Si tiene menos de 60% de asistencia, es REPROBADO directo.
+            // CÁLCULO DE ESTADÍSTICAS
             const totalStudents = processedStudents.length;
-
             if (totalStudents > 0) {
                 let approved = 0;
                 let suspended = 0;
@@ -156,13 +148,13 @@ export const TeacherCourseDetail = () => {
 
                 processedStudents.forEach(s => {
                     if (s.attendancePct < 60) {
-                        failed++; // Reprobado por faltas
+                        failed++;
                     } else if (s.finalTotal >= 14) {
                         approved++;
                     } else if (s.finalTotal >= 9) {
                         suspended++;
                     } else {
-                        failed++; // Reprobado por nota
+                        failed++;
                     }
                 });
 
@@ -172,12 +164,33 @@ export const TeacherCourseDetail = () => {
         } catch (error) { console.error("Error cargando notas", error); }
     }, [id]);
 
+    // 🔥 FUNCIÓN PARA EXPULSAR ALUMNO
+    const handleKickStudent = async (studentId: number) => {
+        if (!confirm("¿Estás seguro de eliminar a este estudiante del curso?")) return;
+
+        try {
+            // endpoint: delete /teacher/student con body
+            await api.delete('/teacher/student', {
+                data: {
+                    subjectId: parseInt(id!),
+                    studentId
+                }
+            });
+
+            alert("Estudiante eliminado.");
+            window.location.reload();
+        } catch (error: any) {
+            console.error(error);
+            alert(error.response?.data?.error || "Error al eliminar estudiante");
+        }
+    };
+
     // --- 3. EFECTO DE CARGA DE DATOS PRINCIPALES ---
     useEffect(() => {
         if (!id) return;
 
         if (activeTab === 'ACTIVITIES') {
-            api.get(`/teacher/events?courseId=${id}`) // 👈 Ruta específica
+            api.get(`/teacher/events?courseId=${id}`)
                 .then(res => setActivities(Array.isArray(res.data) ? res.data : []))
                 .catch(err => console.error("Error cargando actividades", err));
         }
@@ -185,10 +198,8 @@ export const TeacherCourseDetail = () => {
         if (activeTab === 'STUDENTS') {
             api.get(`/teacher/attendance?courseId=${id}&date=${attendanceDate}`)
                 .then(res => {
-                    // 🔥 CORRECCIÓN: Usamos ApiAttendanceRecord en lugar de 'any'
                     const safeData = res.data.map((r: ApiAttendanceRecord) => ({
                         ...r,
-                        // Forzamos el tipado del string status a los valores permitidos
                         status: (r.status || 'PRESENT') as 'PRESENT' | 'LATE' | 'ABSENT' | 'EXCUSED'
                     }));
                     setStudents(safeData);
@@ -196,7 +207,6 @@ export const TeacherCourseDetail = () => {
                 .catch(err => console.error("Error cargando asistencia", err));
         }
 
-        // ... resto del effect
         if (activeTab === 'GRADES') {
             fetchGrades();
         }
@@ -205,7 +215,6 @@ export const TeacherCourseDetail = () => {
 
     // --- HANDLERS ---
 
-    // --- HANDLER: CREAR ACTIVIDAD ---
     const handleCreateActivity = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
@@ -216,9 +225,8 @@ export const TeacherCourseDetail = () => {
                 parallelId: id
             };
 
-            await api.post('/teacher/events', payload); // 👈 Ruta específica
+            await api.post('/teacher/events', payload);
 
-            // Recargar la lista inmediatamente
             const res = await api.get(`/teacher/events?courseId=${id}`);
             setActivities(res.data);
 
@@ -227,13 +235,8 @@ export const TeacherCourseDetail = () => {
             alert("✅ Actividad creada con éxito");
         } catch (error) {
             console.error(error);
-
-            // Casteamos el error a AxiosError para acceder a 'response' de forma segura
             const err = error as AxiosError;
-
-            // TypeScript ahora sabe que 'response' puede existir
             if (err.response && err.response.status === 400) {
-                // Forzamos el tipado de data a string o any según lo que devuelva tu backend
                 alert("❌ Error: " + (err.response.data as string));
             } else {
                 alert("❌ Error al crear actividad");
@@ -241,30 +244,23 @@ export const TeacherCourseDetail = () => {
         }
     };
 
-    // Borrar Actividad
     const handleDeleteActivity = async (activityId: number) => {
         if (!confirm("¿Borrar actividad? Se eliminarán las notas asociadas.")) return;
         try {
-            await api.delete(`/teacher/events/${activityId}`); // 👈 Ruta específica
+            await api.delete(`/teacher/events/${activityId}`);
             setActivities(prev => prev.filter(a => a.id !== activityId));
         } catch (error) { console.error(error); }
     };
 
-    // Guardar Asistencia (CORREGIDO: Sin 'any' y con validación de errores)
     const handleSaveAttendance = async () => {
         setSaving(true);
         try {
-            // Enviamos la fecha tal cual está en el input (YYYY-MM-DD)
-            // El backend se encarga de ponerle T12:00:00Z
             const records = students.map(s => ({ enrollmentId: s.enrollmentId, status: s.status }));
             await api.post('/teacher/attendance', { date: attendanceDate, records });
             alert("✅ Asistencia guardada correctamente");
         } catch (error) {
             console.error(error);
-
-            // 🔥 SOLUCIÓN: Definimos la forma del error manualmente para evitar 'any'
             const err = error as { response?: { status: number; data: string } };
-
             if (err.response && err.response.status === 400) {
                 alert("⚠️ Error: " + err.response.data);
             } else {
@@ -280,7 +276,7 @@ export const TeacherCourseDetail = () => {
             case 'PRESENT': return 'bg-green-100 text-green-700 border-green-200';
             case 'LATE': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
             case 'ABSENT': return 'bg-red-100 text-red-700 border-red-200';
-            case 'EXCUSED': return 'bg-blue-100 text-blue-700 border-blue-200'; // 👈 Nuevo color
+            case 'EXCUSED': return 'bg-blue-100 text-blue-700 border-blue-200';
             default: return 'bg-slate-100 text-slate-500 border-slate-200';
         }
     };
@@ -401,7 +397,6 @@ export const TeacherCourseDetail = () => {
                                         <div className="flex items-center gap-2 mb-2">
                                             <span className={`text-[10px] font-bold uppercase ${theme.secondary} ${theme.text} px-2 py-1 rounded border ${theme.border}`}>{act.type}</span>
                                             <span className="text-xs text-slate-400 flex items-center gap-1 bg-slate-50 px-2 py-1 rounded">
-                                                {/* REEMPLAZA TU CÓDIGO ACTUAL POR ESTA LÍNEA EXACTA: */}
                                                 <Clock size={12} /> {formatDateUTC(act.date)}
                                             </span>
                                         </div>
@@ -431,7 +426,7 @@ export const TeacherCourseDetail = () => {
                 </div>
             )}
 
-            {/* 2. SECCIÓN: ASISTENCIA */}
+            {/* 2. SECCIÓN: ASISTENCIA (Y ELIMINAR ESTUDIANTE) */}
             {activeTab === 'STUDENTS' && (
                 <div className="space-y-6 max-w-5xl mx-auto">
                     <div className="flex justify-between items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
@@ -442,14 +437,10 @@ export const TeacherCourseDetail = () => {
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="divide-y divide-slate-100">
                             {students.map(student => {
-                                // 1. VALIDACIÓN: ¿Es una fecha pasada?
-                                // Comparamos strings YYYY-MM-DD directamente. 
-                                // Si la fecha seleccionada es menor a hoy, es pasado.
                                 const isPastDate = attendanceDate < getTodayLocalString();
 
                                 return (
                                     <div key={student.enrollmentId} className="p-4 flex items-center justify-between hover:bg-slate-50">
-                                        {/* ... (La parte de la foto y nombre se queda igual) ... */}
                                         <div className="flex items-center gap-4">
                                             <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center font-bold text-xs">{student.fullName.substring(0, 2)}</div>
                                             <div>
@@ -462,45 +453,51 @@ export const TeacherCourseDetail = () => {
                                             </div>
                                         </div>
 
-                                        {/* BOTONES CON VALIDACIÓN */}
-                                        <div className="flex gap-2">
-                                            {/* PRESENTE: Se deshabilita si es fecha pasada */}
+                                        <div className="flex gap-2 items-center">
+                                            {/* BOTONES DE ASISTENCIA */}
                                             <button
                                                 disabled={isPastDate}
                                                 onClick={() => setStudents(prev => prev.map(s => s.enrollmentId === student.enrollmentId ? { ...s, status: 'PRESENT' } : s))}
                                                 className={`p-2 rounded-lg transition-all ${isPastDate ? 'opacity-30 cursor-not-allowed bg-slate-100' : student.status === 'PRESENT' ? 'bg-green-500 text-white shadow-md' : 'bg-slate-100 hover:bg-green-100 text-slate-400'}`}
-                                                title={isPastDate ? "No permitido en fechas pasadas" : "Presente"}
+                                                title={isPastDate ? "No permitido" : "Presente"}
                                             >
                                                 <CheckCircle2 size={20} />
                                             </button>
 
-                                            {/* ATRASO: Se deshabilita si es fecha pasada */}
                                             <button
                                                 disabled={isPastDate}
                                                 onClick={() => setStudents(prev => prev.map(s => s.enrollmentId === student.enrollmentId ? { ...s, status: 'LATE' } : s))}
                                                 className={`p-2 rounded-lg transition-all ${isPastDate ? 'opacity-30 cursor-not-allowed bg-slate-100' : student.status === 'LATE' ? 'bg-yellow-500 text-white shadow-md' : 'bg-slate-100 hover:bg-yellow-100 text-slate-400'}`}
-                                                title={isPastDate ? "No permitido en fechas pasadas" : "Atraso"}
+                                                title={isPastDate ? "No permitido" : "Atraso"}
                                             >
                                                 <Clock size={20} />
                                             </button>
 
-                                            {/* FALTA: Se deshabilita si es fecha pasada */}
                                             <button
                                                 disabled={isPastDate}
                                                 onClick={() => setStudents(prev => prev.map(s => s.enrollmentId === student.enrollmentId ? { ...s, status: 'ABSENT' } : s))}
                                                 className={`p-2 rounded-lg transition-all ${isPastDate ? 'opacity-30 cursor-not-allowed bg-slate-100' : student.status === 'ABSENT' ? 'bg-red-500 text-white shadow-md' : 'bg-slate-100 hover:bg-red-100 text-slate-400'}`}
-                                                title={isPastDate ? "No permitido en fechas pasadas" : "Falta"}
+                                                title={isPastDate ? "No permitido" : "Falta"}
                                             >
                                                 <XCircle size={20} />
                                             </button>
 
-                                            {/* 🔵 JUSTIFICADO: SIEMPRE HABILITADO (O solo en pasado, según prefieras) */}
                                             <button
                                                 onClick={() => setStudents(prev => prev.map(s => s.enrollmentId === student.enrollmentId ? { ...s, status: 'EXCUSED' } : s))}
                                                 className={`p-2 rounded-lg transition-all ${student.status === 'EXCUSED' ? 'bg-blue-500 text-white shadow-md' : 'bg-slate-100 hover:bg-blue-100 text-blue-400'}`}
                                                 title="Justificar Falta"
                                             >
                                                 <FileText size={20} />
+                                            </button>
+
+                                            {/* 🔥 BOTÓN DE ELIMINAR ESTUDIANTE */}
+                                            <div className="w-px h-8 bg-slate-200 mx-2"></div>
+                                            <button
+                                                onClick={() => handleKickStudent(student.studentId)}
+                                                className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors border border-red-100"
+                                                title="Eliminar Estudiante del Curso"
+                                            >
+                                                <Trash2 size={18} />
                                             </button>
                                         </div>
                                     </div>
@@ -518,7 +515,7 @@ export const TeacherCourseDetail = () => {
 
             {/* 3. CALIFICACIONES */}
             {activeTab === 'GRADES' && (
-                <div className="space-y-6 max-w-6xl mx-auto"> {/* Hice más ancho el contenedor */}
+                <div className="space-y-6 max-w-6xl mx-auto">
 
                     {/* TARJETAS DE RESUMEN (STATS) */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -568,12 +565,11 @@ export const TeacherCourseDetail = () => {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {gradeMatrix.map(row => {
-                                    // Validar si reprueba por faltas
                                     const isFailedByAttendance = row.attendancePct < 60;
 
                                     return (
                                         <tr key={row.studentId} className="hover:bg-slate-50 transition-colors">
-                                            {/* NOMBRE + AVATAR (Sticky a la izquierda) */}
+                                            {/* NOMBRE + AVATAR */}
                                             <td className="p-4 flex items-center gap-3 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                                                 <img src={row.avatar} className="w-9 h-9 rounded-full bg-slate-200 object-cover" alt="av" />
                                                 <div>

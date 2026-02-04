@@ -9,14 +9,30 @@ import {
   X,
   Users,
   Search,
-  //Settings
+  Settings,
+  Library,
+  FileClock,
+  Map,
 } from 'lucide-react';
 import clsx from 'clsx';
+import React from 'react';
 
-// 1. INTERFAZ
+// 1. DEFINIR TIPO PARA LOS ESTILOS DEL TEMA
+interface ThemeConfig {
+  sidebarBg: string;
+  borderColor: string;
+  headerBg: string;
+  logoGradient: string;
+  activeItem: string;
+  badge: string;
+  roleLabel: string;
+}
+
+// 2. CORREGIR INTERFAZ MENUITEM
 interface MenuItem {
   label: string;
   path: string;
+  // 👇 'ElementType' es el tipo correcto para un componente que se pasa como prop (ej: <Icon />)
   icon: React.ElementType;
   highlight?: boolean;
 }
@@ -30,7 +46,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { user, logout } = useAuthStore();
   const location = useLocation();
 
-  // --- DEFINICIÓN DE MENÚS POR ROL ---
+  // --- DEFINICIÓN DE MENÚS (SIN "MI CUENTA") ---
 
   const studentMenus: MenuItem[] = [
     { label: 'Inicio', path: '/dashboard', icon: LayoutDashboard },
@@ -38,6 +54,9 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { label: 'Mis Materias', path: '/dashboard/subjects', icon: BookOpen },
     { label: 'Buscar Tutorías', path: '/dashboard/tutorings', icon: Search },
     { label: 'Tutor IA', path: '/dashboard/ai-tutor', icon: Bot, highlight: true },
+    { label: 'Catálogo Cursos', path: '/dashboard/catalog', icon: Library },
+    { icon: FileClock, label: 'Historial', path: '/dashboard/history' },
+    { icon: Map, label: 'Malla Curricular', path: '/dashboard/mesh' },
   ];
 
   const teacherMenus: MenuItem[] = [
@@ -56,11 +75,21 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
   // SELECCIÓN DE MENÚ SEGÚN ROL
   let menus = studentMenus;
-  if (user?.role === 'TEACHER') menus = teacherMenus;
-  if (user?.role === 'ADMIN') menus = adminMenus;
+  let profilePath = '/dashboard/profile'; // Ruta por defecto (Estudiante)
+
+  if (user?.role === 'TEACHER') {
+    menus = teacherMenus;
+    profilePath = '/teacher/profile';
+  }
+  if (user?.role === 'ADMIN') {
+    menus = adminMenus;
+    profilePath = '/admin/profile';
+  }
 
   // --- CONFIGURACIÓN DE TEMAS (COLORES) ---
-  const themeMap = {
+  // 3. CONFIGURACIÓN DE TEMAS (TIPADO ESTRICTO)
+  // Usamos Record<Clave, Valor> para decirle que las claves son los roles y el valor es ThemeConfig
+  const themeMap: Record<string, ThemeConfig> = {
     STUDENT: {
       sidebarBg: "bg-slate-900",
       borderColor: "border-slate-800",
@@ -89,7 +118,6 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       roleLabel: "Administrador"
     }
   };
-
   const themeConfig = themeMap[user?.role || 'STUDENT'];
 
   return (
@@ -132,34 +160,53 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           </button>
         </div>
 
-        {/* Info Usuario */}
+        {/* Info Usuario (AHORA ES UN BOTÓN CLICKEABLE) */}
         <div className="px-6 py-6">
-          <div className={clsx("rounded-xl p-4 border flex items-center gap-3", themeConfig.headerBg, themeConfig.borderColor)}>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-inner 
+          <Link
+            to={profilePath} // 👈 Lleva al perfil
+            onClick={onClose}
+            className={clsx(
+              "rounded-xl p-4 border flex items-center gap-3 transition-all duration-200 group relative overflow-hidden",
+              // Efecto hover para que parezca botón
+              "hover:bg-white/10 hover:shadow-lg hover:border-white/20 cursor-pointer",
+              themeConfig.headerBg,
+              themeConfig.borderColor
+            )}
+          >
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-inner shrink-0
               ${user?.role === 'ADMIN' ? 'bg-emerald-600' : user?.role === 'TEACHER' ? 'bg-purple-600' : 'bg-blue-600'}`}>
               {user?.fullName?.charAt(0).toUpperCase()}
             </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold text-white truncate">{user?.fullName}</p>
-              <span className={clsx(
-                "text-[10px] uppercase font-bold px-2 py-0.5 rounded border mt-1 inline-block",
-                themeConfig.badge
-              )}>
-                {themeConfig.roleLabel}
-              </span>
+
+            <div className="overflow-hidden flex-1 min-w-0">
+              <p className="text-sm font-bold text-white truncate group-hover:text-white/90 transition-colors">
+                {user?.fullName}
+              </p>
+              <div className="flex items-center justify-between">
+                <span className={clsx(
+                  "text-[10px] uppercase font-bold px-2 py-0.5 rounded border mt-1 inline-block truncate",
+                  themeConfig.badge
+                )}>
+                  {themeConfig.roleLabel}
+                </span>
+
+                {/* Icono de engranaje que aparece sutilmente */}
+                <Settings size={14} className="text-white/30 group-hover:text-white transition-colors mt-1" />
+              </div>
             </div>
-          </div>
+          </Link>
+
+          <p className="text-[10px] text-center text-slate-500 mt-2 font-medium">
+            Clic en tu tarjeta para ver perfil
+          </p>
         </div>
 
         {/* Navegación Dinámica */}
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
           {menus.map((item) => {
             const Icon = item.icon;
-
-            // Lógica de activación inteligente
             let isActive = location.pathname === item.path;
 
-            // Mantener activo el menú padre si estamos en una sub-ruta
             if (item.path === '/teacher/courses' && location.pathname.startsWith('/teacher/course/')) isActive = true;
             if (item.path === '/dashboard/subjects' && location.pathname.startsWith('/dashboard/course/')) isActive = true;
             if (item.path === '/admin/academic' && location.pathname.startsWith('/admin/academic')) isActive = true;

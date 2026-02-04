@@ -12,12 +12,16 @@ interface RequestWithUser extends Request {
 // =====================================================================
 const getStudentStats = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(String(req.user.id));
+
+    // Buscar periodo activo para filtrar lo actual
+    const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       include: {
         career: { include: { subjects: true } },
-        enrollments: { include: { subject: true } }
+        enrollments: { include: { subject: true, parallel: true } }
       }
     });
 
@@ -27,8 +31,12 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
     }
 
     const approvedSubjects = user.enrollments.filter(e => e.status === 'APPROVED');
-    // Filtramos para contar SOLO las que se están cursando actualmente
-    const takingSubjects = user.enrollments.filter(e => ['TAKING', 'PENDING'].includes(e.status));
+
+    // 🔥 FILTRO: Solo contamos las que son del periodo activo
+    const takingSubjects = user.enrollments.filter(e =>
+      ['TAKING', 'PENDING'].includes(e.status) &&
+      (activePeriod ? e.parallel?.periodId === activePeriod.id : true)
+    );
 
     let average = 0;
     if (approvedSubjects.length > 0) {
@@ -55,7 +63,7 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
         approvedCount: approvedSubjects.length,
         totalSubjects,
         progress: progressPercentage,
-        takingCount: takingSubjects.length,
+        takingCount: takingSubjects.length, // Ahora muestra solo las reales de este periodo
         currentSemester
       }
     });
@@ -65,20 +73,79 @@ const getStudentStats = async (req: RequestWithUser, res: Response) => {
   }
 };
 
+// 🟢 1. NUEVA FUNCIÓN: REGISTRAR NOTAS HISTÓRICAS
+// Permite al estudiante decir "Ya pasé Matemáticas I con 18"
+const registerHistoricalGrades = async (req: RequestWithUser, res: Response) => {
+  try {
+    const userId = parseInt(String(req.user.id));
+    const { grades } = req.body; // Array de { subjectId, grade }
+
+    if (!Array.isArray(grades)) return res.status(400).json({ error: "Formato inválido" });
+
+    // Procesamos cada nota
+    await prisma.$transaction(
+      grades.map((item: any) => {
+        const finalGrade = parseFloat(item.grade);
+        // Si la nota es >= 14 aprueba, si no reprueba (ajusta tu lógica de aprobación aquí)
+        const status = finalGrade >= 14 ? 'APPROVED' : 'FAILED';
+
+        return prisma.enrollment.upsert({
+          where: {
+            userId_subjectId: {
+              userId: userId,
+              subjectId: parseInt(item.subjectId)
+            }
+          },
+          update: {
+            finalGrade: finalGrade,
+            status: status,
+            parallelId: null // Es histórico, no tiene paralelo actual
+          },
+          create: {
+            userId: userId,
+            subjectId: parseInt(item.subjectId),
+            finalGrade: finalGrade,
+            status: status,
+            parallelId: null
+          }
+        });
+      })
+    );
+
+    res.json({ message: "Historial académico actualizado." });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error guardando historial." });
+  }
+};
+
 // =====================================================================
-// 2. DASHBOARD DEL ESTUDIANTE (LÓGICA UNIFICADA)
+// 2. DASHBOARD DEL ESTUDIANTE
 // =====================================================================
 const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
   try {
-    const studentId = req.user.id;
+    const studentId = parseInt(String(req.user.id));
     const now = new Date();
 
-    // 1. OBTENER INSCRIPCIONES ACTIVAS (TAKING/PENDING)
-    // No traemos APPROVED aquí para que no salgan en la lista de "Mis Cursos" del dashboard
+    // 1. OBTENER PERIODO ACTIVO
+    const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
+    // Si no hay periodo activo, devolvemos vacío para no mostrar cosas viejas
+    if (!activePeriod) {
+      return res.send({
+        stats: { average: 0, pendingCount: 0, activeCourses: 0 },
+        pendingTasks: [], todayClasses: [], courses: []
+      });
+    }
+
+    // 2. OBTENER INSCRIPCIONES (SOLO DEL PERIODO ACTIVO)
     const enrollments = await prisma.enrollment.findMany({
       where: {
         userId: studentId,
-        status: { in: ['TAKING', 'PENDING'] }
+        status: { in: ['TAKING', 'PENDING'] },
+        parallel: {
+          periodId: activePeriod.id // 🔥 ESTO FILTRA LOS CURSOS VIEJOS
+        }
       },
       include: {
         parallel: {
@@ -91,6 +158,7 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
         subject: {
           include: {
             parallels: {
+              where: { periodId: activePeriod.id }, // Solo paralelos de este periodo
               include: {
                 events: { where: { type: { in: ['INDIVIDUAL', 'GRUPAL', 'MEDIO', 'FINAL'] } } },
                 schedules: true
@@ -101,7 +169,7 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
       }
     });
 
-    // 2. PROMEDIO GENERAL (SOLO MATERIAS FINALIZADAS)
+    // 3. Promedio General (Histórico)
     const finishedEnrollments = await prisma.enrollment.findMany({
       where: {
         userId: studentId,
@@ -116,21 +184,14 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
       ? (sumGrades / finishedEnrollments.length)
       : 0;
 
-    // 3. TAREAS PENDIENTES (RANGO AMPLIADO 60 DÍAS)
+    // 4. Tareas Pendientes (De los cursos filtrados)
     const startFilter = new Date(now);
-    startFilter.setDate(startFilter.getDate() - 1); // Desde ayer
+    startFilter.setDate(startFilter.getDate() - 1);
     const endFilter = new Date(now);
-    endFilter.setDate(endFilter.getDate() + 60); // Próximos 2 meses
+    endFilter.setDate(endFilter.getDate() + 60);
 
-    const parallelIds: number[] = [];
-    enrollments.forEach((enr: any) => {
-      if (enr.parallelId) parallelIds.push(enr.parallelId);
-      else if (enr.subject?.parallels?.length > 0) {
-        enr.subject.parallels.forEach((p: any) => parallelIds.push(p.id));
-      }
-    });
+    const parallelIds = enrollments.map(e => e.parallelId).filter(id => id !== null) as number[];
 
-    // Buscamos eventos de tipos reales que usa el sistema
     const upcomingEvents = await prisma.event.findMany({
       where: {
         parallelId: { in: parallelIds },
@@ -152,7 +213,6 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
 
     const pendingTasks = upcomingEvents.filter(evt => {
       const submission = myGrades.find(g => g.eventId === evt.id);
-      // Mostrar si NO ha entregado O si no tiene link
       return !submission || !submission.submissionLink;
     }).map(evt => {
       const evtDate = new Date(evt.date);
@@ -170,7 +230,7 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
       };
     });
 
-    // 4. CLASES DE HOY
+    // 5. Clases de Hoy
     const dayOfWeek = now.getDay();
     const todayClasses: any[] = [];
 
@@ -181,9 +241,6 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
       if (enr.parallel) {
         schedules = enr.parallel.schedules || [];
         subjectName = enr.parallel.subject.name;
-      } else if (enr.subject && enr.subject.parallels.length > 0) {
-        schedules = enr.subject.parallels[0].schedules || [];
-        subjectName = enr.subject.name;
       }
 
       if (Array.isArray(schedules)) {
@@ -193,7 +250,7 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
             id: enr.id,
             subject: subjectName,
             time: `${todaySchedule.startTime} - ${todaySchedule.endTime}`,
-            classroom: todaySchedule.classroom || 'General'
+            classroom: 'General'
           });
         }
       }
@@ -201,17 +258,13 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
 
     todayClasses.sort((a, b) => a.time.localeCompare(b.time));
 
-    // 5. DATA DE CURSOS (PROGRESO)
+    // 6. Data de Cursos (Cards)
     const coursesData = await Promise.all(enrollments.map(async (enr: any) => {
       let totalActivities = 0;
-      let currentParallelId = 0;
+      let currentParallelId = enr.parallelId;
 
       if (enr.parallel) {
         totalActivities = enr.parallel.events?.length || 0;
-        currentParallelId = enr.parallel.id;
-      } else if (enr.subject && enr.subject.parallels.length > 0) {
-        totalActivities = enr.subject.parallels[0].events?.length || 0;
-        currentParallelId = enr.subject.parallels[0].id;
       }
 
       const submittedCount = await prisma.activityGrade.count({
@@ -225,8 +278,8 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
       const progress = totalActivities > 0 ? Math.round((submittedCount / totalActivities) * 100) : 0;
 
       return {
-        id: currentParallelId, // 🔥 ID correcto para la navegación
-        name: enr.parallel?.subject.name || enr.subject.name,
+        id: currentParallelId,
+        name: enr.parallel?.subject?.name || "Sin Nombre",
         code: enr.parallel?.code || 'A',
         teacher: "Docente Titular",
         progress: progress,
@@ -256,35 +309,36 @@ const getStudentDashboard = async (req: RequestWithUser, res: Response) => {
 // =====================================================================
 const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(String(req.user.id));
+    const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
+    if (!activePeriod) return res.send([]);
+
     const enrollments = await prisma.enrollment.findMany({
       where: {
         userId,
-        status: { in: ['TAKING', 'PENDING'] }
+        status: { in: ['TAKING', 'PENDING'] },
+        parallel: { periodId: activePeriod.id } // 🔥 FILTRO ACTIVO
       },
       include: {
-        subject: {
-          include: { parallels: { include: { schedules: true } } }
-        }
+        subject: true,
+        parallel: { include: { schedules: true } }
       }
     });
 
     let scheduleEvents: any[] = [];
     enrollments.forEach((enrollment) => {
-      if (enrollment.subject.parallels.length > 0) {
-        const parallel = enrollment.subject.parallels[0];
-        if (parallel && parallel.schedules) {
-          parallel.schedules.forEach((sched: any) => {
-            scheduleEvents.push({
-              id: sched.id,
-              subjectName: enrollment.subject.name,
-              dayOfWeek: sched.dayOfWeek,
-              startTime: sched.startTime,
-              endTime: sched.endTime,
-              classroom: sched.classroom || 'Aula 101'
-            });
+      if (enrollment.parallel && enrollment.parallel.schedules) {
+        enrollment.parallel.schedules.forEach((sched: any) => {
+          scheduleEvents.push({
+            id: sched.id,
+            subjectName: enrollment.subject.name,
+            dayOfWeek: sched.dayOfWeek,
+            startTime: sched.startTime,
+            endTime: sched.endTime,
+            classroom: 'Aula 101'
           });
-        }
+        });
       }
     });
     res.send(scheduleEvents);
@@ -295,44 +349,35 @@ const getWeeklySchedule = async (req: RequestWithUser, res: Response) => {
 };
 
 // =====================================================================
-// 4. MIS CURSOS
+// 4. MIS CURSOS (LISTA COMPLETA)
 // =====================================================================
 const getMyCourses = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(String(req.user.id));
+    const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
+    if (!activePeriod) return res.send([]);
 
     const enrollments = await prisma.enrollment.findMany({
       where: {
         userId: userId,
-        status: { in: ['TAKING', 'PENDING'] }
+        status: { in: ['TAKING', 'PENDING'] },
+        parallel: { periodId: activePeriod.id } // 🔥 FILTRO ACTIVO
       },
       include: { subject: true, parallel: true }
     });
 
-    const courses = await Promise.all(enrollments.map(async (e) => {
-      let pid = e.parallel?.id;
-      let pcode = e.parallel?.code;
-
-      if (!pid) {
-        const fallbackParallel = await prisma.parallel.findFirst({
-          where: { subjectId: e.subjectId }
-        });
-        if (fallbackParallel) {
-          pid = fallbackParallel.id;
-          pcode = fallbackParallel.code;
-        }
-      }
-
+    const courses = enrollments.map((e) => {
       return {
-        courseId: pid || 0,
+        courseId: e.parallelId, // Importante para el link
         subjectName: e.subject.name,
-        code: pcode || "N/A",
+        code: e.parallel?.code || "A",
         level: e.subject.semesterLevel,
         progress: 0
       };
-    }));
+    });
 
-    res.send(courses.filter(c => c.courseId !== 0));
+    res.send(courses);
 
   } catch (e) {
     console.log(e);
@@ -345,7 +390,7 @@ const getMyCourses = async (req: RequestWithUser, res: Response) => {
 // =====================================================================
 const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(String(req.user.id));
     const { courseId } = req.params;
     const parallelId = parseInt(String(courseId || '0'));
 
@@ -412,7 +457,7 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
       };
     });
 
-    const enrollment = await prisma.enrollment.findFirst({ where: { userId, subjectId: parallel.subjectId } });
+    const enrollment = await prisma.enrollment.findFirst({ where: { userId, parallelId: parallel.id } });
     let attendance: any[] = [];
     let attendancePct = 100;
 
@@ -454,7 +499,7 @@ const getStudentCourseDetails = async (req: RequestWithUser, res: Response) => {
 // =====================================================================
 const submitActivity = async (req: RequestWithUser, res: Response) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(String(req.user.id));
     const { activityId, link } = req.body;
 
     if (!link) { res.status(400).send("LINK_REQUERIDO"); return; }
@@ -479,15 +524,31 @@ const submitActivity = async (req: RequestWithUser, res: Response) => {
 };
 
 // =====================================================================
-// 7. TUTORÍAS (MERCADO Y RESERVA)
+// 7. TUTORÍAS
 // =====================================================================
+// 🟢 3. MODIFICADA: TUTORÍAS DISPONIBLES (FILTRO PERSONALIZADO)
 const getAvailableTutorings = async (req: RequestWithUser, res: Response) => {
   try {
-    const studentId = req.user.id;
+    const studentId = parseInt(String(req.user.id));
     const now = new Date();
 
+    // 1. Obtener materias que el alumno está cursando ACTUALMENTE ('TAKING')
+    const myEnrollments = await prisma.enrollment.findMany({
+      where: { userId: studentId, status: 'TAKING' },
+      select: { subjectId: true }
+    });
+
+    const mySubjectIds = myEnrollments.map(e => e.subjectId);
+
+    // 2. Buscar Tutorías
     const tutorings = await prisma.tutoring.findMany({
-      where: { date: { gte: now } },
+      where: {
+        date: { gte: now },
+        OR: [
+          { subjectId: null }, // Tutorías Generales (para todos)
+          { subjectId: { in: mySubjectIds } } // 🔥 Solo materias que estoy viendo
+        ]
+      },
       include: {
         subject: true,
         teacher: { select: { fullName: true } },
@@ -496,6 +557,7 @@ const getAvailableTutorings = async (req: RequestWithUser, res: Response) => {
       orderBy: { date: 'asc' }
     });
 
+    // Mapeo de respuesta (igual que antes)
     const available = tutorings.map(t => {
       const bookedCount = t.bookings.length;
       const isBookedByMe = t.bookings.some(b => b.studentId === studentId);
@@ -526,7 +588,7 @@ const getAvailableTutorings = async (req: RequestWithUser, res: Response) => {
 
 const bookTutoring = async (req: RequestWithUser, res: Response) => {
   try {
-    const studentId = req.user.id;
+    const studentId = parseInt(String(req.user.id));
     const { tutoringId } = req.body;
     const tId = parseInt(tutoringId);
 
@@ -554,6 +616,266 @@ const bookTutoring = async (req: RequestWithUser, res: Response) => {
 };
 
 // =====================================================================
+// 8. FUNCIONES NUEVAS (CATÁLOGO Y GESTIÓN DE CURSOS)
+// =====================================================================
+
+// FILTROS CATÁLOGO
+const getCatalogFilters = async (req: Request, res: Response) => {
+  try {
+    const careers = await prisma.career.findMany({
+      select: { id: true, name: true, totalSemesters: true }
+    });
+    res.json({ careers });
+  } catch (error) {
+    res.status(500).json({ error: "Error cargando filtros" });
+  }
+};
+
+// VER CURSOS ABIERTOS (FILTRADOS)
+const getOpenCourses = async (req: Request, res: Response) => {
+  try {
+    const { id } = (req as any).user;
+    const { careerId, semester } = req.query;
+
+    if (!careerId || !semester) {
+      return res.status(400).json({ error: "Faltan filtros" });
+    }
+
+    const activePeriod = await prisma.academicPeriod.findFirst({
+      where: { isActive: true }
+    });
+
+    if (!activePeriod) {
+      return res.json([]);
+    }
+
+    const parallels = await prisma.parallel.findMany({
+      where: {
+        periodId: activePeriod.id,
+        subject: {
+          careerId: parseInt(String(careerId)),
+          semesterLevel: parseInt(String(semester))
+        }
+      },
+      include: {
+        subject: true,
+        teacher: true,
+        _count: { select: { enrollments: true } }
+      }
+    });
+
+    const myEnrollments = await prisma.enrollment.findMany({
+      where: { userId: parseInt(String(id)), status: { not: 'FAILED' } },
+      select: { subjectId: true, parallelId: true }
+    });
+
+    const mySubjectIds = myEnrollments.map(e => e.subjectId);
+    const myParallelIds = myEnrollments.map(e => e.parallelId);
+
+    const data = parallels.map(p => ({
+      id: p.id,
+      subjectId: p.subjectId,
+      name: p.subject.name,
+      code: p.code,
+      teacher: p.teacher ? p.teacher.fullName : "Por asignar",
+      credits: 4,
+      semester: p.subject.semesterLevel,
+      capacity: p.capacity,
+      enrolledCount: p._count.enrollments,
+      isFull: p._count.enrollments >= p.capacity,
+      isEnrolled: mySubjectIds.includes(p.subjectId) && myParallelIds.includes(p.id)
+    }));
+
+    res.json(data);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error buscando cursos" });
+  }
+};
+
+// 🟢 4. VER CATÁLOGO COMPLETO (MALLA + HISTORIAL)
+const getAllCourses = async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(String((req as any).user.id));
+
+    // 1. Buscamos todas las materias de la carrera del estudiante
+    // Primero necesitamos saber qué carrera tiene
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { careerId: true }
+    });
+
+    if (!user || !user.careerId) {
+      return res.status(400).json({ error: "No tienes una carrera asignada. Solicítala en tu perfil." });
+    }
+
+    const subjects = await prisma.subject.findMany({
+      where: { careerId: user.careerId }, // 🔥 Solo materias de su carrera
+      orderBy: { semesterLevel: 'asc' },
+      include: {
+        enrollments: {
+          where: { userId: userId },
+          orderBy: { id: 'desc' }, // Traer el último intento
+          take: 1,
+          select: { status: true, finalGrade: true }
+        }
+      }
+    });
+
+    const data = subjects.map(s => {
+      const lastEnrollment = s.enrollments[0];
+      return {
+        id: s.id,
+        name: s.name,
+        semester: s.semesterLevel,
+        // Datos clave para la malla:
+        enrollmentStatus: lastEnrollment ? lastEnrollment.status : null, // APPROVED, FAILED, TAKING
+        grade: lastEnrollment ? lastEnrollment.finalGrade : null,
+        isEnrolled: !!lastEnrollment && lastEnrollment.status === 'APPROVED' // Para bloquear en historial
+      };
+    });
+
+    res.json(data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al obtener catálogo" });
+  }
+};
+
+// Inscribirse a un curso
+// 🟢 2. MODIFICADA: INSCRIBIRSE (VALIDACIÓN INTELIGENTE)
+const enrollCourse = async (req: Request, res: Response) => {
+  try {
+    const { id } = (req as any).user;
+    const { parallelId } = req.body;
+
+    // 1. Validar Paralelo
+    const parallel = await prisma.parallel.findUnique({
+      where: { id: parseInt(parallelId) },
+      include: { subject: true, _count: { select: { enrollments: true } } }
+    });
+
+    if (!parallel) return res.status(404).json({ error: "El curso no existe." });
+
+    // 2. Validar Cupos
+    if (parallel._count.enrollments >= parallel.capacity) {
+      return res.status(400).json({ error: "El curso está lleno." });
+    }
+
+    // 3. 🔥 VALIDACIÓN ACADÉMICA (CORE)
+    const history = await prisma.enrollment.findUnique({
+      where: {
+        userId_subjectId: {
+          userId: parseInt(String(id)),
+          subjectId: parallel.subjectId
+        }
+      }
+    });
+
+    if (history) {
+      // A. Si ya la aprobó -> BLOQUEAR
+      if (history.status === 'APPROVED') {
+        return res.status(400).json({ error: `Ya aprobaste ${parallel.subject.name} (Nota: ${history.finalGrade}). No puedes repetirla.` });
+      }
+      // B. Si la está cursando ahora -> BLOQUEAR
+      if (history.status === 'TAKING') {
+        return res.status(400).json({ error: "Ya estás cursando esta materia actualmente." });
+      }
+      // C. Si es 'FAILED' o 'PENDING' -> PERMITIR (Es repetición)
+      // (El código continúa abajo y actualizará el registro existente o creará uno nuevo si borraste el anterior)
+    }
+
+    // 4. Inscribir (Upsert maneja la re-inscripción sobre un registro reprobado)
+    await prisma.enrollment.upsert({
+      where: {
+        userId_subjectId: {
+          userId: parseInt(String(id)),
+          subjectId: parallel.subjectId
+        }
+      },
+      update: {
+        parallelId: parallel.id,
+        status: 'TAKING',
+        finalGrade: null // Reiniciamos nota al recursar
+      },
+      create: {
+        userId: parseInt(String(id)),
+        subjectId: parallel.subjectId,
+        parallelId: parallel.id,
+        status: 'TAKING'
+      }
+    });
+
+    res.json({ message: "Inscripción exitosa" });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al inscribirse" });
+  }
+};
+// 🟢 SOLICITAR ASIGNACIÓN DE CARRERA
+export const requestCareer = async (req: RequestWithUser, res: Response) => {
+  try {
+    const userId = parseInt(String(req.user.id));
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { requestingCareer: true }
+    });
+
+    res.json({ message: "Solicitud enviada al administrador." });
+  } catch (error) {
+    res.status(500).json({ error: "Error al enviar solicitud." });
+  }
+};
+
+// Salir de un curso
+const leaveCourse = async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(String((req as any).user.id));
+    const { subjectId } = req.params; // Viene como subjectId pero es parallelId en el frontend
+
+    // Convertimos a entero para Prisma
+    const idToDelete = parseInt(String(subjectId));
+
+    if (isNaN(idToDelete)) {
+      return res.status(400).json({ error: "ID inválido" });
+    }
+
+    // INTENTO 1: Borrar por ID de Paralelo (Lo normal en el sistema nuevo)
+    const deletedParallel = await prisma.enrollment.deleteMany({
+      where: {
+        userId: userId,
+        parallelId: idToDelete
+      }
+    });
+
+    if (deletedParallel.count > 0) {
+      return res.json({ message: "Baja exitosa." });
+    }
+
+    // INTENTO 2: Limpieza de Zombies (Borrar por SubjectId si no tenía paralelo asignado)
+    const deletedSubject = await prisma.enrollment.deleteMany({
+      where: {
+        userId: userId,
+        subjectId: idToDelete
+      }
+    });
+
+    if (deletedSubject.count > 0) {
+      return res.json({ message: "Baja exitosa (registro antiguo)." });
+    }
+
+    res.status(404).json({ error: "No se encontró la inscripción." });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al salir del curso" });
+  }
+};
+
+// =====================================================================
 // EXPORTS
 // =====================================================================
 export {
@@ -564,5 +886,11 @@ export {
   getStudentCourseDetails,
   submitActivity,
   getAvailableTutorings,
-  bookTutoring
+  bookTutoring,
+  getAllCourses,
+  enrollCourse,
+  leaveCourse,
+  getCatalogFilters,
+  getOpenCourses,
+  registerHistoricalGrades
 };

@@ -71,8 +71,7 @@ export const LoginPage = () => {
         }
     };
 
-    // --- OAUTH REAL CON FIREBASE ---
-    // --- OAUTH REAL CON FIREBASE ---
+    // --- OAUTH CON FIREBASE ---
     const handleOAuth = async (providerName: 'GOOGLE' | 'GITHUB') => {
         setIsLoading(true);
         setError('');
