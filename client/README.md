@@ -1,73 +1,99 @@
-# React + TypeScript + Vite
+# 🎓 IngeniaQ - Academic Management System (Client)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)
+![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
 
-Currently, two official plugins are available:
+**IngeniaQ Client** is the frontend interface for the IngeniaQ Academic System. It provides a comprehensive dashboard for Students, Teachers, and Administrators to manage courses, grades, attendance, and tutoring sessions effectively.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ✨ Key Features
 
-## React Compiler
+### 👨‍🎓 Student Module
+* **Academic Dashboard:** Real-time summary of pending tasks and current grades.
+* **Agenda & Calendar:** Manage deadlines and personal events.
+* **Tutoring Booking:** Search and book reinforcement sessions (Virtual/In-person).
+* **Grade History:** View curriculum progress and academic history.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 👩‍🏫 Teacher Module
+* **Course Management:** Manage activities, assignments, and exams.
+* **Grading Book:** Real-time calculation of weighted averages (Individual, Group, Midterm, Final).
+* **Attendance Tracking:** Mark students as Present, Late, or Absent.
+* **Tutoring Scheduler:** Create and manage tutoring availability.
 
-## Expanding the ESLint configuration
+### 🛡️ Admin Module
+* **User Management:** Create and manage accounts.
+* **Academic Period Control:** Open/Close semesters.
+* **System Configuration:** Global settings.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## 🛠️ Tech Stack
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+* **Framework:** React 18 (Vite)
+* **Language:** TypeScript
+* **Styling:** Tailwind CSS + Lucide React (Icons)
+* **State Management:** Zustand (Persisted Auth Store)
+* **Routing:** React Router DOM v6
+* **HTTP Client:** Axios
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🚀 Getting Started
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+### Prerequisites
+* Node.js (v18 or higher)
+* npm or yarn
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### Installation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1.  Clone the repository:
+    ```bash
+    git clone [https://github.com/your-username/ingeniaq-client.git](https://github.com/your-username/ingeniaq-client.git)
+    cd ingeniaq-client
+    ```
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+
+3.  Configure Environment Variables:
+    Create a `.env` file in the root directory:
+    ```env
+    VITE_API_URL=http://localhost:3000/api
+    ```
+
+4.  Run the development server:
+    ```bash
+    npm run dev
+    ```
+
+## 🐳 Docker Deployment
+
+To build and run this application in a production container using Nginx:
+
+1.  **Build the image:**
+    ```bash
+    docker build -t ingeniaq-client .
+    ```
+
+2.  **Run the container:**
+    ```bash
+    docker run -d -p 80:80 --name ingeniaq-frontend ingeniaq-client
+    ```
+
+Open [http://localhost](http://localhost) to view it in the browser.
+
+## 📂 Project Structure
+
+```bash
+src/
+├── api/            # Axios configuration
+├── components/     # Reusable UI components
+├── pages/          # Application views
+│   ├── admin/      # Administrator pages
+│   ├── auth/       # Login & Security
+│   ├── student/    # Student specific pages
+│   ├── teacher/    # Teacher specific pages
+│   └── shared/     # Shared profiles/layouts
+├── store/          # Zustand state (Auth)
+├── utils/          # Helpers & Theme logic
+└── App.tsx         # Main Routing
