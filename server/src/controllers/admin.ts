@@ -3,26 +3,31 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// Extended Request interface to include user info from middleware
 interface RequestWithUser extends Request {
-    user?: any;
+    user?: any; // Replace 'any' with your actual User type if available
 }
 
 // =====================================================================
-// 1. DASHBOARD ADMIN
+// 1. DASHBOARD ANALYTICS
 // =====================================================================
 
+/**
+ * Retrieves high-level statistics for the admin dashboard.
+ * Includes total users, student/teacher breakdown, pending requests, and active period.
+ */
 export const getAdminDashboard = async (req: RequestWithUser, res: Response) => {
     try {
         const totalUsers = await prisma.user.count();
         const totalStudents = await prisma.user.count({ where: { role: 'STUDENT' } });
         const totalTeachers = await prisma.user.count({ where: { role: 'TEACHER' } });
 
-        // Contamos quiénes tienen requestingCareer = true
+        // Count users requesting a career assignment
         const pendingRequests = await prisma.user.count({
             where: { requestingCareer: true }
         });
 
-        // Buscamos periodo activo para mostrar el nombre
+        // Fetch active period name or default to "None"
         const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
         const totalSubjects = await prisma.subject.count();
 
@@ -31,17 +36,22 @@ export const getAdminDashboard = async (req: RequestWithUser, res: Response) => 
             students: totalStudents,
             teachers: totalTeachers,
             pendingRequests,
-            activePeriod: activePeriod ? activePeriod.name : "Ninguno", // Para que no salga vacío
+            activePeriod: activePeriod ? activePeriod.name : "None",
             subjects: totalSubjects
         });
     } catch (e) {
-        console.error(e);
+        console.error("Error fetching dashboard stats:", e);
         res.status(500).send("ERROR_DASHBOARD_STATS");
     }
 };
-// ... imports
 
-// 1. OBTENER USUARIOS (CON CARRERA)
+// =====================================================================
+// 2. USER MANAGEMENT
+// =====================================================================
+
+/**
+ * Retrieves all users with their career information.
+ */
 export const getAdminUsers = async (req: RequestWithUser, res: Response) => {
     try {
         const users = await prisma.user.findMany({
@@ -52,7 +62,7 @@ export const getAdminUsers = async (req: RequestWithUser, res: Response) => {
                 email: true,
                 role: true,
                 createdAt: true,
-                requestingCareer: true, // 👈 ¡ESTO ES LO QUE FALTA!
+                requestingCareer: true,
                 career: { select: { id: true, name: true } }
             }
         });
@@ -62,7 +72,9 @@ export const getAdminUsers = async (req: RequestWithUser, res: Response) => {
     }
 };
 
-// 2. OBTENER LISTA SIMPLE DE CARRERAS (Para el Select)
+/**
+ * Retrieves a simplified list of careers for dropdown menus.
+ */
 export const getCareersList = async (req: RequestWithUser, res: Response) => {
     try {
         const careers = await prisma.career.findMany({
@@ -74,15 +86,18 @@ export const getCareersList = async (req: RequestWithUser, res: Response) => {
     }
 };
 
-// 🔥 ACTUALIZAR ROL Y CARRERA (Versión corregida)
+/**
+ * Updates a user's role and assigned career.
+ * Automatically clears the 'requestingCareer' flag if a career is assigned.
+ */
 export const updateUser = async (req: RequestWithUser, res: Response) => {
     try {
         const { id } = req.params;
         const { role, careerId } = req.body;
 
-        // Validamos y convertimos el careerId
         let finalCareerId: number | null = null;
 
+        // Validate and parse careerId if the role is STUDENT
         if (role === 'STUDENT' && careerId) {
             const parsedId = parseInt(String(careerId));
             if (!isNaN(parsedId) && parsedId > 0) {
@@ -95,23 +110,41 @@ export const updateUser = async (req: RequestWithUser, res: Response) => {
             data: {
                 role: role,
                 careerId: finalCareerId,
-                // Si le asignamos carrera, apagamos la solicitud
+                // If a career is assigned, turn off the request flag
                 requestingCareer: finalCareerId ? false : undefined
             }
         });
 
-        res.send({ message: "Usuario actualizado correctamente." });
+        res.send({ message: "User updated successfully." });
     } catch (e) {
-        console.error("Error actualizando usuario:", e);
+        console.error("Error updating user:", e);
         res.status(500).send("ERROR_UPDATING_USER");
     }
 };
 
-// ... Asegúrate de exportar getCareersList y updateUser al final
+/**
+ * Simple endpoint to update just the role (Legacy/Alternative).
+ */
+export const updateUserRole = async (req: RequestWithUser, res: Response) => {
+    try {
+        const { id, role } = req.body;
+        const user = await prisma.user.update({
+            where: { id: parseInt(id) },
+            data: { role }
+        });
+        res.send(user);
+    } catch (e) {
+        res.status(500).send("ERROR_UPDATING_ROLE");
+    }
+};
 
 // =====================================================================
-// 2. GESTIÓN DE PERIODOS ACADÉMICOS
+// 3. ACADEMIC PERIODS MANAGEMENT
 // =====================================================================
+
+/**
+ * Retrieves all academic periods ordered by start date.
+ */
 export const getPeriods = async (req: RequestWithUser, res: Response) => {
     try {
         const periods = await prisma.academicPeriod.findMany({ orderBy: { startDate: 'desc' } });
@@ -121,39 +154,49 @@ export const getPeriods = async (req: RequestWithUser, res: Response) => {
     }
 };
 
-export const createPeriod = async (req: RequestWithUser, res: Response) => {
+/**
+ * Creates a new academic period.
+ */
+export const createPeriod = async (req: Request, res: Response) => {
     try {
         const { name, startDate, endDate } = req.body;
 
-        // Desactivar todos los anteriores antes de crear uno nuevo activo
-        await prisma.academicPeriod.updateMany({ data: { isActive: false } });
+        if (!name || !startDate || !endDate) {
+            return res.status(400).json({ error: "All fields are required" });
+        }
 
-        const period = await prisma.academicPeriod.create({
+        const newPeriod = await prisma.academicPeriod.create({
             data: {
                 name,
                 startDate: new Date(startDate),
                 endDate: new Date(endDate),
-                isActive: true
+                isActive: false
             }
         });
-        res.send(period);
-    } catch (e) {
-        res.status(500).send("ERROR_CREATING_PERIOD");
+
+        res.json(newPeriod);
+    } catch (error) {
+        console.error("Error creating period:", error);
+        res.status(500).json({ error: "Failed to create period" });
     }
 };
 
+/**
+ * Toggles the active status of a period.
+ * Ensures only one period is active at a time.
+ */
 export const togglePeriodStatus = async (req: RequestWithUser, res: Response) => {
     try {
         const { id } = req.params;
-        const periodId = parseInt(String(id)); // 🔥 Corrección de tipo
+        const periodId = parseInt(String(id));
 
-        if (isNaN(periodId)) return res.status(400).send("ID inválido");
+        if (isNaN(periodId)) return res.status(400).send("Invalid ID");
 
         const period = await prisma.academicPeriod.findUnique({ where: { id: periodId } });
 
-        if (!period) return res.status(404).send("Periodo no encontrado");
+        if (!period) return res.status(404).send("Period not found");
 
-        // Si se activa este, desactivar los demás
+        // If activating this one, deactivate all others first
         if (!period.isActive) {
             await prisma.academicPeriod.updateMany({ data: { isActive: false } });
         }
@@ -169,39 +212,9 @@ export const togglePeriodStatus = async (req: RequestWithUser, res: Response) =>
     }
 };
 
-// =====================================================================
-// 3. ESTRUCTURA ACADÉMICA (Carreras, Materias y Paralelos)
-// =====================================================================
-
-// 🟢 MODIFICADO: TRAER TAMBIÉN LOS HORARIOS
-export const getAcademicStructure = async (req: Request, res: Response) => {
-    try {
-        const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
-
-        const careers = await prisma.career.findMany({
-            include: {
-                subjects: {
-                    include: {
-                        parallels: {
-                            where: activePeriod ? { periodId: activePeriod.id } : undefined,
-                            include: {
-                                teacher: true,
-                                schedules: true // 🔥 IMPORTANTE: Incluir horarios
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        res.json(careers);
-    } catch (error) {
-        res.status(500).json({ error: "Error estructura académica" });
-    }
-};
-
-// ... (Tus otras funciones existentes: createParallel, etc.) ...
-
-// 🔥 NUEVO: ACTUALIZAR PERIODO (Nombre/Fechas)
+/**
+ * Updates period details (Name and Dates).
+ */
 export const updatePeriod = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
@@ -215,23 +228,22 @@ export const updatePeriod = async (req: Request, res: Response) => {
                 endDate: new Date(endDate)
             }
         });
-        res.json({ message: "Periodo actualizado" });
+        res.json({ message: "Period updated" });
     } catch (error) {
-        res.status(500).json({ error: "Error al actualizar periodo" });
+        res.status(500).json({ error: "Error updating period" });
     }
 };
 
-// 🔥 NUEVO: ELIMINAR PERIODO
-// 🔥 NUEVO: ELIMINAR PERIODO (EN CASCADA TRANSACCIONAL)
+/**
+ * Deletes a period and all associated data (Cascade delete via Transaction).
+ */
 export const deletePeriod = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const periodId = parseInt(String(id));
 
-        // Usamos una transacción para garantizar que se borre todo o nada
         await prisma.$transaction(async (tx) => {
-
-            // 1. Identificar los paralelos involucrados
+            // Find involved parallels (courses)
             const parallels = await tx.parallel.findMany({
                 where: { periodId: periodId },
                 select: { id: true }
@@ -240,86 +252,101 @@ export const deletePeriod = async (req: Request, res: Response) => {
             const parallelIds = parallels.map(p => p.id);
 
             if (parallelIds.length > 0) {
-                // --- NIVEL 3: DETALLES (Nietos) ---
-
-                // Borrar Notas
+                // Delete Grades
                 await tx.activityGrade.deleteMany({
                     where: { event: { parallelId: { in: parallelIds } } }
                 });
 
-                // Borrar Asistencias (vinculadas a inscripciones de estos paralelos)
+                // Delete Attendance
                 await tx.attendance.deleteMany({
                     where: { enrollment: { parallelId: { in: parallelIds } } }
                 });
 
-                // Borrar Horarios
+                // Delete Schedules
                 await tx.schedule.deleteMany({
                     where: { parallelId: { in: parallelIds } }
                 });
 
-                // --- NIVEL 2: ESTRUCTURA (Hijos) ---
-
-                // Borrar Eventos de Agenda (Exámenes, Deberes)
+                // Delete Agenda Events
                 await tx.event.deleteMany({
                     where: { parallelId: { in: parallelIds } }
                 });
 
-                // 🔥 ESTO FALTABA: Borrar Rubros de Evaluación (Actividades)
-                // (Gestión Individual, Examen Final, etc.)
+                // Delete Evaluation Activities (Grade categories)
                 await tx.activity.deleteMany({
                     where: { parallelId: { in: parallelIds } }
                 });
 
-                // Borrar Inscripciones
+                // Delete Enrollments
                 await tx.enrollment.deleteMany({
                     where: { parallelId: { in: parallelIds } }
                 });
 
-                // --- NIVEL 1: CURSOS (Padres) ---
-
-                // Borrar los Paralelos
+                // Delete Parallels
                 await tx.parallel.deleteMany({
                     where: { periodId: periodId }
                 });
             }
 
-            // --- NIVEL 0: PERIODO (Raíz) ---
-
-            // Finalmente borrar el Periodo
+            // Finally delete the Period
             await tx.academicPeriod.delete({
                 where: { id: periodId }
             });
         });
 
-        res.json({ message: "Periodo eliminado correctamente." });
+        res.json({ message: "Period deleted successfully." });
 
     } catch (error) {
-        console.error("Error CRÍTICO eliminando periodo:", error);
-        res.status(500).json({ error: "No se pudo eliminar el periodo. Revisa la consola del servidor." });
+        console.error("Critical error deleting period:", error);
+        res.status(500).json({ error: "Could not delete period. Check server logs." });
     }
 };
 
+// =====================================================================
+// 4. ACADEMIC STRUCTURE (Careers, Subjects, Parallels)
+// =====================================================================
 
-
-// 🔥 NUEVO: ELIMINAR HORARIO
-export const deleteSchedule = async (req: Request, res: Response) => {
+/**
+ * Retrieves the full academic tree: Careers -> Subjects -> Parallels -> Schedules/Teachers.
+ * Only returns parallels for the currently ACTIVE period.
+ */
+export const getAcademicStructure = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
-        await prisma.schedule.delete({ where: { id: parseInt(String(id)) } });
-        res.json({ message: "Horario eliminado" });
+        const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
+
+        const careers = await prisma.career.findMany({
+            include: {
+                subjects: {
+                    include: {
+                        parallels: {
+                            // Filter parallels by active period if one exists
+                            where: activePeriod ? { periodId: activePeriod.id } : undefined,
+                            include: {
+                                teacher: true,
+                                schedules: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        res.json(careers);
     } catch (error) {
-        res.status(500).json({ error: "Error al eliminar horario" });
+        res.status(500).json({ error: "Error fetching academic structure" });
     }
 };
 
-// Crear Paralelo (Curso)
+/**
+ * Creates a new Parallel (Course instance) for a subject.
+ * Automatically generates default evaluation activities.
+ */
 export const createParallel = async (req: RequestWithUser, res: Response) => {
     try {
         const { subjectId, code, capacity, teacherId } = req.body;
 
         const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
         if (!activePeriod) {
-            return res.status(400).send("No hay periodo activo. Crea uno primero.");
+            return res.status(400).send("No active period found. Please activate one first.");
         }
 
         const newParallel = await prisma.parallel.create({
@@ -332,8 +359,7 @@ export const createParallel = async (req: RequestWithUser, res: Response) => {
             }
         });
 
-        // 🔥 Crear estructura de evaluación por defecto
-        // Esto evita que el curso nazca sin categorías de notas
+        // Initialize default evaluation structure
         await prisma.activity.createMany({
             data: [
                 { name: "Gestión Individual", type: "INDIVIDUAL", maxScore: 7.0, parallelId: newParallel.id },
@@ -350,13 +376,13 @@ export const createParallel = async (req: RequestWithUser, res: Response) => {
     }
 };
 
-// EDITAR CURSO (Cambiar Profe o Cupo)
+/**
+ * Updates Parallel details (Teacher or Capacity).
+ */
 export const updateCourse = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         const { teacherId, capacity } = req.body;
-
-        // 🔥 Corrección de tipos: String(id)
         const courseId = parseInt(String(id));
 
         await prisma.parallel.update({
@@ -367,47 +393,47 @@ export const updateCourse = async (req: Request, res: Response) => {
             }
         });
 
-        res.json({ message: "Curso actualizado correctamente" });
+        res.json({ message: "Course updated successfully" });
     } catch (error) {
-        res.status(500).json({ error: "Error actualizando curso" });
+        res.status(500).json({ error: "Error updating course" });
     }
 };
 
-// ELIMINAR CURSO
+/**
+ * Deletes a Parallel (Course).
+ * Validates that no students are enrolled before deletion.
+ */
 export const deleteCourse = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-
-        // 🔥 Corrección de tipos: String(id)
         const courseId = parseInt(String(id));
 
-        // 1. Validar si tiene alumnos inscritos
+        // Validation: Check for enrollments
         const enrolled = await prisma.enrollment.count({
             where: { parallelId: courseId }
         });
 
         if (enrolled > 0) {
-            return res.status(400).json({ error: "No se puede eliminar: Hay estudiantes inscritos." });
+            return res.status(400).json({ error: "Cannot delete: Course has enrolled students." });
         }
 
-        // 2. Limpieza en orden (Horarios -> Actividades -> Paralelo)
-
-        // Borrar horarios
+        // Cleanup dependencies
         await prisma.schedule.deleteMany({ where: { parallelId: courseId } });
-
-        // Borrar actividades (categorías de notas) creadas automáticamente
         await prisma.activity.deleteMany({ where: { parallelId: courseId } });
-
-        // Borrar paralelo
+        
+        // Delete course
         await prisma.parallel.delete({ where: { id: courseId } });
 
-        res.json({ message: "Curso eliminado correctamente" });
+        res.json({ message: "Course deleted successfully" });
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: "Error eliminando curso" });
+        res.status(500).json({ error: "Error deleting course" });
     }
 };
 
+/**
+ * Adds a time block to a Parallel's schedule.
+ */
 export const addSchedule = async (req: RequestWithUser, res: Response) => {
     try {
         const { parallelId, dayOfWeek, startTime, endTime } = req.body;
@@ -426,19 +452,15 @@ export const addSchedule = async (req: RequestWithUser, res: Response) => {
     }
 };
 
-// =====================================================================
-// 4. GESTIÓN DE USUARIOS
-// =====================================================================
-
-export const updateUserRole = async (req: RequestWithUser, res: Response) => {
+/**
+ * Deletes a specific schedule block.
+ */
+export const deleteSchedule = async (req: Request, res: Response) => {
     try {
-        const { id, role } = req.body;
-        const user = await prisma.user.update({
-            where: { id: parseInt(id) },
-            data: { role }
-        });
-        res.send(user);
-    } catch (e) {
-        res.status(500).send("ERROR_UPDATING_ROLE");
+        const { id } = req.params;
+        await prisma.schedule.delete({ where: { id: parseInt(String(id)) } });
+        res.json({ message: "Schedule deleted" });
+    } catch (error) {
+        res.status(500).json({ error: "Error deleting schedule" });
     }
 };

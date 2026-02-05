@@ -2,43 +2,39 @@ import { Router } from "express";
 import { checkJwt } from "../middleware/session";
 import {
     getAdminDashboard,
-    getPeriods, createPeriod, togglePeriodStatus,
-    getAcademicStructure, createParallel, addSchedule,
-    getAdminUsers, updateUserRole, updateCourse, deleteCourse,
-    updatePeriod, deletePeriod, deleteSchedule, getCareersList, 
-    updateUser
+    getPeriods, createPeriod, togglePeriodStatus, updatePeriod, deletePeriod,
+    getAcademicStructure, createParallel, addSchedule, updateCourse, deleteCourse, deleteSchedule,
+    getAdminUsers, updateUserRole, getCareersList, updateUser
 } from "../controllers/admin";
 
 const router = Router();
 
-// Middleware de seguridad: Solo ADMIN (podrías añadir validación de rol extra aquí)
+// Global Security Middleware: Validates JWT session
 router.use(checkJwt);
 
-// Dashboard
-// 👇 2. AGREGA ESTA RUTA NUEVA 👇
-router.get("/dashboard/stats", checkJwt, getAdminDashboard);
+// --- DASHBOARD ---
+router.get("/dashboard/stats", getAdminDashboard);
 
-// Periodos
+// --- PERIODS ---
 router.get("/periods", getPeriods);
-router.post("/periods", createPeriod);
-router.put("/periods/:id/toggle", togglePeriodStatus);
-router.put("/period/:id", checkJwt, togglePeriodStatus); // Activar/Desactivar
-router.put("/period/data/:id", checkJwt, updatePeriod);  // 🔥 Editar Datos
-router.delete("/period/:id", checkJwt, deletePeriod);    // 🔥 Eliminar
-// Académico
+router.post("/periods", createPeriod); // Note: Make sure it's POST /periods or /period depending on your frontend
+router.post("/period", createPeriod); // Adding alias just in case frontend calls singular
+router.put("/period/:id", togglePeriodStatus); // Toggle Active/Inactive
+router.put("/period/data/:id", updatePeriod);  // Edit Name/Dates
+router.delete("/period/:id", deletePeriod);
+
+// --- ACADEMIC STRUCTURE ---
 router.get("/academic/structure", getAcademicStructure);
 router.post("/academic/parallel", createParallel);
 router.post("/academic/schedule", addSchedule);
-router.put("/course/:id", checkJwt, updateCourse);    // Editar
-router.delete("/course/:id", checkJwt, deleteCourse); // Eliminar
-// Rutas de Horarios
-router.delete("/schedule/:id", checkJwt, deleteSchedule);
-// Usuarios
+router.put("/course/:id", updateCourse);
+router.delete("/course/:id", deleteCourse);
+router.delete("/schedule/:id", deleteSchedule);
+
+// --- USERS ---
 router.get("/users", getAdminUsers);
-router.post("/users/role", updateUserRole);
-router.get("/users/careers", checkJwt, getCareersList); // 🔥 Nueva ruta para el dropdown
-router.put("/users/:id", checkJwt, updateUser);
-
-
+router.post("/users/role", updateUserRole); // Legacy
+router.get("/users/careers", getCareersList);
+router.put("/users/:id", updateUser);
 
 export { router };

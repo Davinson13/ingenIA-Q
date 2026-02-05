@@ -1,20 +1,27 @@
-// client/src/config/firebase.ts
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, GithubAuthProvider } from "firebase/auth";
 
-// REEMPLAZA CON TUS DATOS DE FIREBASE CONSOLE:
+/**
+ * Firebase Configuration
+ * * Note: These values are pulled from the .env file in the client root.
+ * In Vite, environment variables must start with VITE_ to be exposed to the client.
+ * * While these keys are technically visible in the client-side bundle, 
+ * using .env allows for easy switching between development and production environments.
+ */
 const firebaseConfig = {
-  apiKey: "AIzaSyD0bdTsBnh2jPfjPPmDw3EMm2OZEn6gTyk",
-  authDomain: "ingeniaq-d4786.firebaseapp.com",
-  projectId: "ingeniaq-d4786",
-  storageBucket: "ingeniaq-d4786.firebasestorage.app",
-  messagingSenderId: "976121050175",
-  appId: "1:976121050175:web:299c3b0fb51e2f09c4f48a",
-  measurementId: "G-J4PDJKVB9K"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Inicializar Firebase
+// Initialize Firebase App
 const app = initializeApp(firebaseConfig);
+
+// Export Auth and Providers for use in the application
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();

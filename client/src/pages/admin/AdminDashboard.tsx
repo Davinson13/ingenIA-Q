@@ -1,45 +1,62 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuthStore } from '../../store/authStore';
 import { getTheme } from '../../utils/themeUtils';
-import { Link } from 'react-router-dom';
 import {
     Users, Calendar, BookOpen, School,
     Activity, ShieldCheck, TrendingUp, AlertTriangle, CheckCircle, ArrowRight
 } from 'lucide-react';
 
+// --- INTERFACES ---
+
+/**
+ * Statistics data structure received from the backend.
+ */
 interface AdminStats {
     students: number;
     teachers: number;
     activePeriod: string;
     subjects: number;
-    pendingRequests: number; // 🔥 Aseguramos que esto venga del backend
+    pendingRequests: number; // Count of users requesting career assignment
     users: number;
 }
 
+/**
+ * AdminDashboard Page
+ * Displays high-level metrics, system status, and quick actions for Administrators.
+ * It provides a quick overview of the academic institution's health.
+ */
 export const AdminDashboard = () => {
     const { user } = useAuthStore();
     const theme = getTheme('ADMIN');
     const [stats, setStats] = useState<AdminStats | null>(null);
 
+    // --- Data Fetching ---
     useEffect(() => {
-        api.get('/admin/dashboard/stats') // Asegúrate de que la ruta sea correcta
+        api.get<AdminStats>('/admin/dashboard/stats')
             .then(res => setStats(res.data))
-            .catch(console.error);
+            .catch(error => {
+                console.error("Failed to load dashboard stats", error);
+            });
     }, []);
 
-    if (!stats) return (
-        <div className="flex flex-col items-center justify-center h-full p-20 animate-pulse">
-            <ShieldCheck size={48} className="text-slate-200 mb-4" />
-            <p className="text-slate-400 font-bold">Cargando panel de control...</p>
-        </div>
-    );
+    // --- Loading State ---
+    if (!stats) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full p-20 animate-pulse">
+                <ShieldCheck size={48} className="text-slate-200 mb-4" />
+                <p className="text-slate-400 font-bold">Loading dashboard...</p>
+            </div>
+        );
+    }
 
+    // --- Configuration: Metric Cards ---
     const cards = [
         {
-            title: "Comunidad Estudiantil",
+            title: "Student Community",
             value: stats.students,
-            label: "Alumnos",
+            label: "Students",
             icon: Users,
             color: "text-blue-600",
             bg: "bg-blue-50",
@@ -47,9 +64,9 @@ export const AdminDashboard = () => {
             link: "/admin/users"
         },
         {
-            title: "Cuerpo Docente",
+            title: "Faculty Staff",
             value: stats.teachers,
-            label: "Profesores",
+            label: "Teachers",
             icon: School,
             color: "text-purple-600",
             bg: "bg-purple-50",
@@ -57,9 +74,9 @@ export const AdminDashboard = () => {
             link: "/admin/users"
         },
         {
-            title: "Ciclo Académico",
-            value: stats.activePeriod || "Inactivo",
-            label: "Actual",
+            title: "Academic Cycle",
+            value: stats.activePeriod || "Inactive",
+            label: "Current",
             icon: Calendar,
             color: "text-emerald-600",
             bg: "bg-emerald-50",
@@ -68,9 +85,9 @@ export const AdminDashboard = () => {
             link: "/admin/periods"
         },
         {
-            title: "Oferta Educativa",
+            title: "Educational Offer",
             value: stats.subjects,
-            label: "Materias",
+            label: "Subjects",
             icon: BookOpen,
             color: "text-orange-600",
             bg: "bg-orange-50",
@@ -79,7 +96,7 @@ export const AdminDashboard = () => {
         },
     ];
 
-    // Estado del sistema basado en alertas
+    // System Health Check based on pending actions
     const systemStatus = stats.pendingRequests > 0 ? 'WARNING' : 'OK';
 
     return (
@@ -93,13 +110,13 @@ export const AdminDashboard = () => {
                             <ShieldCheck size={20} />
                             <span className="text-xs font-bold uppercase tracking-wider bg-white/20 px-2 py-1 rounded-lg">Admin Portal</span>
                         </div>
-                        <h1 className="text-3xl md:text-4xl font-black mb-2">Hola, {user?.fullName.split(' ')[0]}</h1>
+                        <h1 className="text-3xl md:text-4xl font-black mb-2">Hello, {user?.fullName.split(' ')[0]}</h1>
                         <p className="text-emerald-100 text-lg max-w-xl opacity-90 leading-relaxed">
-                            Resumen ejecutivo de la plataforma académica.
+                            Executive summary of the academic platform.
                         </p>
                     </div>
 
-                    {/* Alerta flotante integrada en el header si hay pendientes */}
+                    {/* Integrated Alert in Header (If requests exist) */}
                     {stats.pendingRequests > 0 && (
                         <Link to="/admin/users" className="bg-white/10 backdrop-blur-md border border-white/20 p-4 rounded-2xl flex items-center gap-4 hover:bg-white/20 transition-all group cursor-pointer">
                             <div className="bg-amber-500 text-white p-3 rounded-full animate-pulse shadow-lg">
@@ -107,14 +124,14 @@ export const AdminDashboard = () => {
                             </div>
                             <div>
                                 <p className="font-black text-2xl leading-none">{stats.pendingRequests}</p>
-                                <p className="text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100">Solicitudes Pendientes</p>
+                                <p className="text-xs font-bold uppercase tracking-wide opacity-80 group-hover:opacity-100">Pending Requests</p>
                             </div>
                             <ArrowRight className="opacity-50 group-hover:translate-x-1 transition-transform" />
                         </Link>
                     )}
                 </div>
 
-                {/* Decoración */}
+                {/* Background Decoration */}
                 <div className="absolute right-0 bottom-0 opacity-10 transform translate-x-10 translate-y-10">
                     <Activity size={250} />
                 </div>
@@ -132,7 +149,7 @@ export const AdminDashboard = () => {
                             <div className={`p-3 rounded-xl ${card.bg} ${card.color} group-hover:scale-110 transition-transform duration-300 shadow-sm`}>
                                 <card.icon size={24} strokeWidth={2.5} />
                             </div>
-                            {idx === 0 && <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1"><TrendingUp size={10} /> +Activos</span>}
+                            {idx === 0 && <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full flex items-center gap-1"><TrendingUp size={10} /> Active</span>}
                         </div>
 
                         <div>
@@ -143,7 +160,7 @@ export const AdminDashboard = () => {
                             </h3>
                         </div>
 
-                        {/* Icono decorativo gigante */}
+                        {/* Hover Icon Decoration */}
                         <div className={`absolute -right-6 -bottom-6 opacity-0 group-hover:opacity-5 transition-opacity duration-500 ${card.color}`}>
                             <card.icon size={100} />
                         </div>
@@ -151,68 +168,68 @@ export const AdminDashboard = () => {
                 ))}
             </div>
 
-            {/* 3. ESTADO DEL SISTEMA & ACCIONES */}
+            {/* 3. SYSTEM STATUS & ACTIONS */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-                {/* Panel de Estado */}
+                {/* Status Panel */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-                            <Activity className="text-slate-400" /> Estado del Sistema
+                            <Activity className="text-slate-400" /> System Status
                         </h3>
                         <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 border ${systemStatus === 'OK'
-                                ? 'bg-green-50 text-green-700 border-green-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+                            ? 'bg-green-50 text-green-700 border-green-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
                             }`}>
                             {systemStatus === 'OK' ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
-                            {systemStatus === 'OK' ? 'Operativo' : 'Atención Requerida'}
+                            {systemStatus === 'OK' ? 'Operational' : 'Attention Required'}
                         </span>
                     </div>
 
                     <div className="space-y-4">
-                        {/* Monitor de Solicitudes */}
+                        {/* Career Requests Monitor */}
                         <div className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${stats.pendingRequests > 0
-                                ? 'bg-amber-50 border-amber-200'
-                                : 'bg-slate-50 border-slate-100 opacity-60'
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-slate-50 border-slate-100 opacity-60'
                             }`}>
                             <div className={`w-3 h-3 rounded-full shadow-sm ${stats.pendingRequests > 0 ? 'bg-amber-500 animate-bounce' : 'bg-slate-300'}`}></div>
                             <div className="flex-1">
-                                <p className="text-sm font-bold text-slate-700">Asignación de Carreras</p>
+                                <p className="text-sm font-bold text-slate-700">Career Assignment</p>
                                 <p className="text-xs text-slate-500">
                                     {stats.pendingRequests > 0
-                                        ? `${stats.pendingRequests} alumnos esperan asignación.`
-                                        : "No hay solicitudes pendientes."}
+                                        ? `${stats.pendingRequests} students waiting for assignment.`
+                                        : "No pending requests."}
                                 </p>
                             </div>
                             {stats.pendingRequests > 0 && (
-                                <Link to="/admin/users" className="text-xs font-bold text-amber-700 hover:underline">Resolver →</Link>
+                                <Link to="/admin/users" className="text-xs font-bold text-amber-700 hover:underline">Resolve →</Link>
                             )}
                         </div>
 
-                        {/* Monitor Base de Datos (Fake pero visualmente útil) */}
+                        {/* Database Monitor (Visual Mock) */}
                         <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100">
                             <div className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
                             <div>
-                                <p className="text-sm font-bold text-slate-700">Conexión de Base de Datos</p>
-                                <p className="text-xs text-slate-500">Latencia: 24ms • Conexiones activas: Estables</p>
+                                <p className="text-sm font-bold text-slate-700">Database Connection</p>
+                                <p className="text-xs text-slate-500">Latency: 24ms • Active connections: Stable</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Tarjeta Soporte */}
+                {/* Support Card */}
                 <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden flex flex-col justify-center">
                     <div className="relative z-10">
                         <div className="bg-white/10 w-12 h-12 rounded-xl flex items-center justify-center mb-4 backdrop-blur-sm">
                             <ShieldCheck size={24} />
                         </div>
-                        <h3 className="font-bold text-xl mb-1">Soporte Técnico</h3>
-                        <p className="text-slate-400 text-sm mb-6">¿Problemas con la plataforma? Reporta incidencias críticas directamente al equipo de desarrollo.</p>
+                        <h3 className="font-bold text-xl mb-1">Technical Support</h3>
+                        <p className="text-slate-400 text-sm mb-6">Issues with the platform? Report critical incidents directly to the development team.</p>
                         <button className="w-full bg-white text-slate-900 py-3 rounded-xl text-sm font-bold hover:bg-slate-200 transition-colors shadow-lg">
-                            Contactar Soporte
+                            Contact Support
                         </button>
                     </div>
-                    {/* Fondo decorativo */}
+                    {/* Background Decoration */}
                     <div className="absolute -right-10 -top-10 opacity-5">
                         <ShieldCheck size={200} />
                     </div>

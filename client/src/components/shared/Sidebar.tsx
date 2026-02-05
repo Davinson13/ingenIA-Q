@@ -1,5 +1,7 @@
-import { useAuthStore } from '../../store/authStore';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuthStore } from '../../store/authStore';
+import clsx from 'clsx';
 import {
   LayoutDashboard,
   CalendarDays,
@@ -14,10 +16,11 @@ import {
   FileClock,
   Map,
 } from 'lucide-react';
-import clsx from 'clsx';
-import React from 'react';
 
-// 1. DEFINIR TIPO PARA LOS ESTILOS DEL TEMA
+/**
+ * Interface for Theme Configuration.
+ * Defines the color palette and styling classes for different user roles (Student, Teacher, Admin).
+ */
 interface ThemeConfig {
   sidebarBg: string;
   borderColor: string;
@@ -28,13 +31,15 @@ interface ThemeConfig {
   roleLabel: string;
 }
 
-// 2. CORREGIR INTERFAZ MENUITEM
+/**
+ * Interface for Menu Items.
+ * Represents a single navigation link in the sidebar menu.
+ */
 interface MenuItem {
   label: string;
   path: string;
-  // 👇 'ElementType' es el tipo correcto para un componente que se pasa como prop (ej: <Icon />)
-  icon: React.ElementType;
-  highlight?: boolean;
+  icon: React.ElementType; // Correct type for passing React components (icons) as props
+  highlight?: boolean;     // Optional: highlights special features like AI tools
 }
 
 interface SidebarProps {
@@ -42,40 +47,48 @@ interface SidebarProps {
   onClose: () => void;
 }
 
+/**
+ * Sidebar Component
+ * Renders the main vertical navigation menu. 
+ * It dynamically adapts its colors, menu items, and links based on the 
+ * authenticated user's role (Student, Teacher, Admin).
+ * It supports mobile responsive toggling via the `isOpen` prop.
+ */
 export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
   const { user, logout } = useAuthStore();
   const location = useLocation();
 
-  // --- DEFINICIÓN DE MENÚS (SIN "MI CUENTA") ---
+  // --- Menu Definitions ---
 
   const studentMenus: MenuItem[] = [
-    { label: 'Inicio', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Mi Calendario', path: '/dashboard/calendar', icon: CalendarDays },
-    { label: 'Mis Materias', path: '/dashboard/subjects', icon: BookOpen },
-    { label: 'Buscar Tutorías', path: '/dashboard/tutorings', icon: Search },
-    { label: 'Tutor IA', path: '/dashboard/ai-tutor', icon: Bot, highlight: true },
-    { label: 'Catálogo Cursos', path: '/dashboard/catalog', icon: Library },
-    { icon: FileClock, label: 'Historial', path: '/dashboard/history' },
-    { icon: Map, label: 'Malla Curricular', path: '/dashboard/mesh' },
+    { label: 'Home', path: '/dashboard', icon: LayoutDashboard },
+    { label: 'My Calendar', path: '/dashboard/calendar', icon: CalendarDays },
+    { label: 'My Subjects', path: '/dashboard/subjects', icon: BookOpen },
+    { label: 'Find Tutor', path: '/dashboard/tutorings', icon: Search },
+    { label: 'AI Tutor', path: '/dashboard/ai-tutor', icon: Bot, highlight: true },
+    { label: 'Course Catalog', path: '/dashboard/catalog', icon: Library },
+    { label: 'History', path: '/dashboard/history', icon: FileClock },
+    { label: 'Curriculum', path: '/dashboard/mesh', icon: Map },
   ];
 
   const teacherMenus: MenuItem[] = [
-    { label: 'Panel Docente', path: '/teacher/dashboard', icon: LayoutDashboard },
-    { label: 'Mis Cursos', path: '/teacher/courses', icon: BookOpen },
-    { label: 'Mi Agenda', path: '/teacher/calendar', icon: CalendarDays },
-    { label: 'Tutorías', path: '/teacher/tutorings', icon: Users },
+    { label: 'Teacher Panel', path: '/teacher/dashboard', icon: LayoutDashboard },
+    { label: 'My Courses', path: '/teacher/courses', icon: BookOpen },
+    { label: 'My Agenda', path: '/teacher/calendar', icon: CalendarDays },
+    { label: 'Tutoring', path: '/teacher/tutorings', icon: Users },
   ];
 
   const adminMenus: MenuItem[] = [
-    { label: 'Panel Admin', path: '/admin/dashboard', icon: LayoutDashboard },
-    { label: 'Periodos', path: '/admin/periods', icon: CalendarDays },
-    { label: 'Gestión Académica', path: '/admin/academic', icon: BookOpen },
-    { label: 'Usuarios', path: '/admin/users', icon: Users },
+    { label: 'Admin Panel', path: '/admin/dashboard', icon: LayoutDashboard },
+    { label: 'Periods', path: '/admin/periods', icon: CalendarDays },
+    { label: 'Academic Mgmt', path: '/admin/academic', icon: BookOpen },
+    { label: 'Users', path: '/admin/users', icon: Users },
   ];
 
-  // SELECCIÓN DE MENÚ SEGÚN ROL
+  // --- Role Logic ---
+  // Determine which menu set and profile path to use based on the user's role.
   let menus = studentMenus;
-  let profilePath = '/dashboard/profile'; // Ruta por defecto (Estudiante)
+  let profilePath = '/dashboard/profile'; // Default path for Students
 
   if (user?.role === 'TEACHER') {
     menus = teacherMenus;
@@ -86,9 +99,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     profilePath = '/admin/profile';
   }
 
-  // --- CONFIGURACIÓN DE TEMAS (COLORES) ---
-  // 3. CONFIGURACIÓN DE TEMAS (TIPADO ESTRICTO)
-  // Usamos Record<Clave, Valor> para decirle que las claves son los roles y el valor es ThemeConfig
+  // --- Theme Configuration ---
+  // Maps user roles to specific CSS classes (Tailwind) for dynamic styling of the sidebar.
   const themeMap: Record<string, ThemeConfig> = {
     STUDENT: {
       sidebarBg: "bg-slate-900",
@@ -97,7 +109,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       logoGradient: "from-blue-400 to-teal-400",
       activeItem: "bg-blue-600 text-white shadow-lg shadow-blue-500/20",
       badge: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-      roleLabel: "Estudiante"
+      roleLabel: "Student"
     },
     TEACHER: {
       sidebarBg: "bg-[#1a1625]",
@@ -106,7 +118,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       logoGradient: "from-purple-400 to-pink-400",
       activeItem: "bg-purple-600 text-white shadow-lg shadow-purple-500/20",
       badge: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-      roleLabel: "Docente"
+      roleLabel: "Teacher"
     },
     ADMIN: {
       sidebarBg: "bg-slate-950",
@@ -115,23 +127,27 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
       logoGradient: "from-emerald-400 to-cyan-400",
       activeItem: "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20",
       badge: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-      roleLabel: "Administrador"
+      roleLabel: "Administrator"
     }
   };
+
+  // Fallback to STUDENT theme if role is undefined or not found
   const themeConfig = themeMap[user?.role || 'STUDENT'];
 
   return (
     <>
-      {/* Overlay Móvil */}
+      {/* Mobile Overlay */}
+      {/* Background shade for mobile menu when open */}
       <div
         className={clsx(
           "fixed inset-0 z-40 bg-black/50 transition-opacity md:hidden",
           isOpen ? "opacity-100 visible" : "opacity-0 invisible"
         )}
         onClick={onClose}
+        aria-hidden="true"
       />
 
-      {/* Sidebar */}
+      {/* Main Sidebar Container */}
       <aside
         className={clsx(
           "fixed left-0 top-0 h-screen w-64 text-white flex flex-col transition-transform duration-300 z-50 shadow-2xl border-r",
@@ -141,7 +157,8 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
         )}
       >
 
-        {/* Encabezado */}
+        {/* Header Section */}
+        {/* Contains Logo and Role Label */}
         <div className={clsx("p-6 border-b flex justify-between items-center backdrop-blur-sm", themeConfig.borderColor, themeConfig.headerBg)}>
           <div>
             <h1 className={clsx("text-2xl font-black tracking-tight bg-gradient-to-r bg-clip-text text-transparent", themeConfig.logoGradient)}>
@@ -152,6 +169,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
             </p>
           </div>
 
+          {/* Close Button (Mobile Only) */}
           <button
             onClick={onClose}
             className="md:hidden text-slate-400 hover:text-white transition-colors"
@@ -160,24 +178,26 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           </button>
         </div>
 
-        {/* Info Usuario (AHORA ES UN BOTÓN CLICKEABLE) */}
+        {/* User Info Card (Clickable to Profile) */}
+        {/* Displays user avatar and name, links to profile page */}
         <div className="px-6 py-6">
           <Link
-            to={profilePath} // 👈 Lleva al perfil
+            to={profilePath}
             onClick={onClose}
             className={clsx(
               "rounded-xl p-4 border flex items-center gap-3 transition-all duration-200 group relative overflow-hidden",
-              // Efecto hover para que parezca botón
               "hover:bg-white/10 hover:shadow-lg hover:border-white/20 cursor-pointer",
               themeConfig.headerBg,
               themeConfig.borderColor
             )}
           >
+            {/* User Avatar Initials */}
             <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg text-white shadow-inner shrink-0
               ${user?.role === 'ADMIN' ? 'bg-emerald-600' : user?.role === 'TEACHER' ? 'bg-purple-600' : 'bg-blue-600'}`}>
               {user?.fullName?.charAt(0).toUpperCase()}
             </div>
 
+            {/* User Details */}
             <div className="overflow-hidden flex-1 min-w-0">
               <p className="text-sm font-bold text-white truncate group-hover:text-white/90 transition-colors">
                 {user?.fullName}
@@ -190,23 +210,25 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                   {themeConfig.roleLabel}
                 </span>
 
-                {/* Icono de engranaje que aparece sutilmente */}
+                {/* Settings Icon (Visible on Hover) */}
                 <Settings size={14} className="text-white/30 group-hover:text-white transition-colors mt-1" />
               </div>
             </div>
           </Link>
 
           <p className="text-[10px] text-center text-slate-500 mt-2 font-medium">
-            Clic en tu tarjeta para ver perfil
+            Click card to view profile
           </p>
         </div>
 
-        {/* Navegación Dinámica */}
+        {/* Dynamic Navigation Menu */}
+        {/* Renders the list of links based on user role */}
         <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
           {menus.map((item) => {
             const Icon = item.icon;
-            let isActive = location.pathname === item.path;
 
+            // Logic to determine if a menu item is active, including sub-routes handling
+            let isActive = location.pathname === item.path;
             if (item.path === '/teacher/courses' && location.pathname.startsWith('/teacher/course/')) isActive = true;
             if (item.path === '/dashboard/subjects' && location.pathname.startsWith('/dashboard/course/')) isActive = true;
             if (item.path === '/admin/academic' && location.pathname.startsWith('/admin/academic')) isActive = true;
@@ -221,7 +243,7 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
                   isActive
                     ? themeConfig.activeItem
                     : "text-slate-400 hover:bg-white/5 hover:text-white",
-
+                  // Special highlight styling (e.g., for AI Tutor)
                   !isActive && item.highlight && "text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/20 hover:shadow-indigo-900/10"
                 )}
               >
@@ -235,14 +257,15 @@ export const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
           })}
         </nav>
 
-        {/* Botón Salir */}
+        {/* Footer / Logout Section */}
+        {/* Fixed at the bottom of sidebar */}
         <div className={clsx("p-4 border-t", themeConfig.borderColor)}>
           <button
             onClick={logout}
             className="flex items-center justify-center gap-2 w-full px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-xl transition-all text-sm font-bold border border-transparent hover:border-red-500/20"
           >
             <LogOut size={18} />
-            Cerrar Sesión
+            Logout
           </button>
         </div>
       </aside>
