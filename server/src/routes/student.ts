@@ -17,6 +17,8 @@ import {
   requestCareer
 } from "../controllers/student";
 
+import { chatWithTutor } from "../controllers/ai";
+
 import {
   getStudentAgenda,
   createPersonalEvent,
@@ -63,5 +65,8 @@ router.post("/history/register", checkJwt, registerHistoricalGrades);
 router.get("/catalog/filters", checkJwt, getCatalogFilters); // Filtros (Carreras)
 router.get("/catalog/courses", checkJwt, getOpenCourses);    // Cursos filtrados
 router.post('/request-career', checkJwt, requestCareer)
+
+// 👇 RUTA CHAT IA
+router.post("/ai-chat", checkJwt, chatWithTutor);
 
 export { router };

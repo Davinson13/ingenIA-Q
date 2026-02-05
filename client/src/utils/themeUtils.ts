@@ -2,14 +2,14 @@
 
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN';
 
-interface ThemePalette {
-    primary: string;       // Botones principales, headers fuertes
-    primaryHover: string;  // Hover de botones
-    secondary: string;     // Fondos suaves, badges
-    text: string;          // Texto destacado
-    border: string;        // Bordes de elementos destacados
-    gradient: string;      // Para los encabezados grandes
-    icon: string;          // Color de iconos
+export interface ThemePalette {
+    primary: string;       // Main buttons, strong headers
+    primaryHover: string;  // Button hover states
+    secondary: string;     // Soft backgrounds, badges
+    text: string;          // Highlighted text color
+    border: string;        // Borders for highlighted elements
+    gradient: string;      // Gradient class for large headers/banners
+    icon: string;          // Icon specific colors
 }
 
 export const ROLE_THEMES: Record<UserRole, ThemePalette> = {
@@ -28,7 +28,7 @@ export const ROLE_THEMES: Record<UserRole, ThemePalette> = {
         secondary: 'bg-purple-50',
         text: 'text-purple-600',
         border: 'border-purple-200',
-        gradient: 'from-purple-700 to-pink-600', // Un gradiente más distintivo
+        gradient: 'from-purple-700 to-pink-600', // Distinct gradient
         icon: 'text-purple-500'
     },
     ADMIN: {
@@ -42,7 +42,12 @@ export const ROLE_THEMES: Record<UserRole, ThemePalette> = {
     }
 };
 
-// Hook simple para obtener colores (puedes usarlo directamente o como función)
-export const getTheme = (role: UserRole) => {
+/**
+ * Retrieves the color theme palette based on the user's role.
+ * Falls back to the STUDENT theme if the role is undefined or invalid.
+ * * @param role - The current user's role ('STUDENT', 'TEACHER', 'ADMIN')
+ * @returns The ThemePalette object containing Tailwind classes.
+ */
+export const getTheme = (role: UserRole): ThemePalette => {
     return ROLE_THEMES[role] || ROLE_THEMES.STUDENT;
 };

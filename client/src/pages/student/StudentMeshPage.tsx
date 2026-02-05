@@ -2,20 +2,39 @@ import { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { Check, X, Clock, Lock, Loader2 } from 'lucide-react';
 
+// --- INTERFACES ---
+
+interface MeshSubject {
+    id: number;
+    name: string;
+    semester: number;
+    enrollmentStatus: 'APPROVED' | 'TAKING' | 'FAILED' | null;
+    grade?: number;
+    credits?: number; // Optional if not always present
+}
+
+/**
+ * StudentMeshPage Component
+ * Visualizes the student's academic progress (curriculum map) grouped by semester.
+ */
 export const StudentMeshPage = () => {
-    const [subjects, setSubjects] = useState<any[]>([]);
+    // --- State Management ---
+    const [subjects, setSubjects] = useState<MeshSubject[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        api.get('/student/catalog/all')
+        api.get<MeshSubject[]>('/student/catalog/all')
             .then(res => setSubjects(res.data))
-            .catch(() => alert("Error cargando malla."))
+            .catch(() => alert("Error loading curriculum."))
             .finally(() => setLoading(false));
     }, []);
 
-    // Agrupar por niveles y ordenar
-    const levels = Array.from(new Set(subjects.map(s => s.semester))).sort((a: any, b: any) => a - b);
+    // Group by semester and sort ascending
+    const levels = Array.from(new Set(subjects.map(s => s.semester))).sort((a, b) => a - b);
 
+    /**
+     * Returns CSS classes based on subject status.
+     */
     const getStatusColor = (status: string | null) => {
         switch (status) {
             case 'APPROVED': return 'bg-emerald-100 border-emerald-300 text-emerald-900';
@@ -25,6 +44,9 @@ export const StudentMeshPage = () => {
         }
     };
 
+    /**
+     * Returns the appropriate icon component based on status.
+     */
     const getStatusIcon = (status: string | null) => {
         switch (status) {
             case 'APPROVED': return <Check size={16} className="text-emerald-600" />;
@@ -36,26 +58,26 @@ export const StudentMeshPage = () => {
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-slate-400" /></div>;
 
-    if (subjects.length === 0) return <div className="text-center p-10 text-slate-400">No hay materias asignadas a tu carrera.</div>;
+    if (subjects.length === 0) return <div className="text-center p-10 text-slate-400">No subjects assigned to your career.</div>;
 
     return (
         <div className="space-y-6 animate-in fade-in h-full flex flex-col pb-4">
             <div className="px-4 md:px-0">
-                <h1 className="text-3xl font-black text-slate-800">Malla Curricular</h1>
-                <p className="text-slate-500 text-sm">Tu mapa de progreso académico.</p>
+                <h1 className="text-3xl font-black text-slate-800">Curriculum Map</h1>
+                <p className="text-slate-500 text-sm">Your academic progress roadmap.</p>
             </div>
 
-            {/* CONTENEDOR RESPONSIVO CON SCROLL */}
+            {/* RESPONSIVE SCROLL CONTAINER */}
             <div className="flex-1 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent px-4 md:px-0">
                 <div className="flex gap-4 min-w-max">
-                    {levels.map((level: any) => (
+                    {levels.map((level) => (
                         <div key={level} className="w-64 shrink-0 flex flex-col gap-3">
-                            {/* Header del Semestre */}
+                            {/* Semester Header */}
                             <div className="bg-slate-800 text-white py-2 px-3 rounded-lg text-center font-bold shadow-md text-sm sticky top-0 z-10">
-                                Semestre {level}
+                                Semester {level}
                             </div>
                             
-                            {/* Lista de Materias */}
+                            {/* Subject List */}
                             <div className="flex flex-col gap-3">
                                 {subjects.filter(s => s.semester === level).map(subj => {
                                     const status = subj.enrollmentStatus;
@@ -68,7 +90,7 @@ export const StudentMeshPage = () => {
                                                 </div>
                                             </div>
                                             <div className="flex justify-between items-end border-t border-black/5 pt-2 mt-1">
-                                                <span className="text-[10px] font-bold opacity-60">4 Créditos</span>
+                                                <span className="text-[10px] font-bold opacity-60">4 Credits</span>
                                                 {status === 'APPROVED' && (
                                                     <span className="text-xs font-black bg-white/60 px-1.5 py-0.5 rounded text-emerald-800">
                                                         {subj.grade}/20
@@ -84,12 +106,12 @@ export const StudentMeshPage = () => {
                 </div>
             </div>
 
-            {/* LEYENDA */}
+            {/* LEGEND */}
             <div className="flex flex-wrap gap-4 justify-center text-xs font-bold text-slate-600 border-t border-slate-100 pt-4 px-4">
-                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-100 border border-emerald-300 rounded"></div> Aprobada</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div> Cursando</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div> Reprobada</span>
-                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-50 border border-slate-200 rounded"></div> Pendiente</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-100 border border-emerald-300 rounded"></div> Approved</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-blue-100 border border-blue-300 rounded"></div> In Progress</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-red-100 border border-red-300 rounded"></div> Failed</span>
+                <span className="flex items-center gap-1"><div className="w-3 h-3 bg-slate-50 border border-slate-200 rounded"></div> Pending</span>
             </div>
         </div>
     );
