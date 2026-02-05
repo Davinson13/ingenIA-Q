@@ -2,71 +2,87 @@ import { Request, Response } from "express";
 import { prisma } from "../config/prisma";
 import { encrypt, compare } from "../utils/handlePassword";
 
-export const updateProfile = async (req: Request, res: Response) => {
-  try {
-    const { id } = (req as any).user;
-    // Solo recibimos lo básico y seguridad
-    const { fullName, password, newPassword } = req.body;
+// Interface to handle authenticated user data from middleware
+interface RequestWithUser extends Request {
+    user?: { id: number };
+}
 
-    const user = await prisma.user.findUnique({ where: { id } });
-    if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+/**
+ * Updates the authenticated user's profile.
+ * - Allows updating 'fullName'.
+ * - Handles password changes securely (verifying old password first).
+ * - Blocks password changes for OAuth users (Google/GitHub).
+ */
+export const updateProfile = async (req: RequestWithUser, res: Response) => {
+    try {
+        const id = req.user?.id;
+        if (!id) return res.status(401).send("Unauthorized");
 
-    // Objeto base de actualización (Solo Nombre por ahora)
-    let updatedData: any = { fullName };
+        const { fullName, password, newPassword } = req.body;
 
-    // --- LÓGICA DE CAMBIO DE CONTRASEÑA ---
-    if (newPassword) {
-      // 1. Si es usuario de Google, prohibido cambiar pass
-      if (user.provider !== "LOCAL" && user.provider !== null) {
-        return res.status(400).json({ 
-            error: "Tu cuenta está vinculada a Google/GitHub. No usas contraseña." 
-        });
-      }
+        const user = await prisma.user.findUnique({ where: { id } });
+        if (!user) return res.status(404).json({ error: "User not found" });
 
-      // 2. Verificar que mandó la contraseña anterior
-      if (!password) {
-        return res.status(400).json({ error: "Debes ingresar tu contraseña actual para hacer cambios." });
-      }
-      
-      // 3. Verificar que la contraseña anterior sea correcta
-      if (user.password) {
-        const isCorrect = await compare(password, user.password);
-        if (!isCorrect) {
-            return res.status(403).json({ error: "La contraseña actual es incorrecta." });
+        // Base update object (Name only initially)
+        let updatedData: any = { fullName };
+
+        // --- PASSWORD CHANGE LOGIC ---
+        if (newPassword) {
+            // 1. Block social accounts
+            if (user.provider !== "LOCAL" && user.provider !== null) {
+                return res.status(400).json({ 
+                    error: "Your account is linked to Google/GitHub. You do not use a password." 
+                });
+            }
+
+            // 2. Require current password
+            if (!password) {
+                return res.status(400).json({ error: "You must enter your current password to make changes." });
+            }
+            
+            // 3. Verify current password
+            if (user.password) {
+                const isCorrect = await compare(password, user.password);
+                if (!isCorrect) {
+                    return res.status(403).json({ error: "Incorrect current password." });
+                }
+            }
+
+            // 4. Encrypt new password
+            updatedData.password = await encrypt(newPassword);
         }
-      }
 
-      // 4. Encriptar y guardar la nueva
-      updatedData.password = await encrypt(newPassword);
+        // Execute Update
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: updatedData,
+        });
+
+        // Return safe user object (exclude sensitive fields)
+        const { password: _, verificationCode: __, ...userSafe } = updatedUser;
+        
+        res.json({ message: "Profile updated successfully", user: userSafe });
+
+    } catch (error) {
+        console.error("Profile Update Error:", error);
+        res.status(500).json({ error: "Error updating profile" });
     }
-
-    // Actualizamos en la BD
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data: updatedData,
-    });
-
-    // Devolvemos el usuario limpio (sin pass)
-    const { password: _, ...userSafe } = updatedUser;
-    
-    res.json({ message: "Perfil actualizado correctamente", user: userSafe });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error al actualizar perfil" });
-  }
 };
 
-export const deleteAccount = async (req: Request, res: Response) => {
-  try {
-    const { id } = (req as any).user;
-    
-    // Eliminación directa
-    await prisma.user.delete({ where: { id } });
-    
-    res.json({ message: "Cuenta eliminada correctamente" });
-  } catch (error) {
-    console.error("Error eliminando cuenta:", error);
-    res.status(500).json({ error: "No se pudo eliminar la cuenta." });
-  }
+/**
+ * Permanently deletes the authenticated user's account.
+ * Note: Prisma cascade delete logic in schema should handle related data cleanup.
+ */
+export const deleteAccount = async (req: RequestWithUser, res: Response) => {
+    try {
+        const id = req.user?.id;
+        if (!id) return res.status(401).send("Unauthorized");
+        
+        await prisma.user.delete({ where: { id } });
+        
+        res.json({ message: "Account deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting account:", error);
+        res.status(500).json({ error: "Could not delete account. Please contact support." });
+    }
 };

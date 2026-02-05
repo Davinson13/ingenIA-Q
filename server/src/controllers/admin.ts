@@ -362,10 +362,10 @@ export const createParallel = async (req: RequestWithUser, res: Response) => {
         // Initialize default evaluation structure
         await prisma.activity.createMany({
             data: [
-                { name: "Gestión Individual", type: "INDIVIDUAL", maxScore: 7.0, parallelId: newParallel.id },
-                { name: "Gestión Grupal", type: "GRUPAL", maxScore: 5.0, parallelId: newParallel.id },
-                { name: "Examen Medio", type: "MEDIO", maxScore: 2.0, parallelId: newParallel.id },
-                { name: "Examen Final", type: "FINAL", maxScore: 6.0, parallelId: newParallel.id }
+                { name: "Individual Work", type: "INDIVIDUAL", maxScore: 7.0, parallelId: newParallel.id },
+                { name: "Group Work", type: "GRUPAL", maxScore: 5.0, parallelId: newParallel.id },
+                { name: "Midterm Exam", type: "MEDIO", maxScore: 2.0, parallelId: newParallel.id },
+                { name: "Final Exam", type: "FINAL", maxScore: 6.0, parallelId: newParallel.id }
             ]
         });
 

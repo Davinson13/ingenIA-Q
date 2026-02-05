@@ -18,7 +18,7 @@ interface UserProfile {
     id: number;
     fullName: string;
     email: string;
-    role: string;
+    role: 'STUDENT' | 'TEACHER' | 'ADMIN';
     provider?: string;
     requestingCareer?: boolean;
     career?: {

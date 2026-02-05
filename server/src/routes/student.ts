@@ -2,7 +2,7 @@ import { Router } from "express";
 import { checkJwt } from "../middleware/session";
 import {
   getWeeklySchedule,
-  getMyCourses,          // <--- ESTA ES NUEVA (Reemplaza a getStudentGrades)
+  getMyCourses,
   getStudentCourseDetails,
   submitActivity,
   getAvailableTutorings,
@@ -14,7 +14,8 @@ import {
   getCatalogFilters, 
   getOpenCourses,
   registerHistoricalGrades,
-  requestCareer
+  requestCareer,
+  getStudentStats // Ensure this is exported in controller if used directly, usually part of dashboard
 } from "../controllers/student";
 
 import { chatWithTutor } from "../controllers/ai";
@@ -28,45 +29,85 @@ import {
 
 const router = Router();
 
+// =====================================================================
+// MIDDLEWARE
+// =====================================================================
+// All student routes require authentication
 router.use(checkJwt);
 
-// 1. Estadísticas para el Dashboard
-router.get("/dashboard", checkJwt, getStudentDashboard);
+// =====================================================================
+// 1. DASHBOARD & HOME
+// =====================================================================
+// GET /api/student/dashboard - Main stats, tasks, and today's classes
+router.get("/dashboard", getStudentDashboard);
 
-// 2. Horario para el Calendario
-router.get("/schedule", checkJwt, getWeeklySchedule);
+// GET /api/student/schedule - Weekly class blocks
+router.get("/schedule", getWeeklySchedule);
 
-// 3. Lista de Materias (Tarjetas)
-router.get("/courses", checkJwt, getMyCourses);
+// =====================================================================
+// 2. COURSE MANAGEMENT (MY COURSES)
+// =====================================================================
+// GET /api/student/courses - List of currently active courses (Cards)
+router.get("/courses", getMyCourses);
 
-// 4. Detalle de una Materia (Notas, Agenda, Asistencia)
-router.get("/course/:courseId", checkJwt, getStudentCourseDetails);
+// GET /api/student/course/:courseId - Detail view (Grades, Agenda, Attendance)
+router.get("/course/:courseId", getStudentCourseDetails);
 
-router.post("/submit", checkJwt, submitActivity);
+// POST /api/student/submit - Submit homework/activity link
+router.post("/submit", submitActivity);
 
-// AGENDA ESTUDIANTE
+// =====================================================================
+// 3. CALENDAR & AGENDA
+// =====================================================================
+// GET /api/student/calendar - Aggregated monthly agenda
 router.get("/calendar", getStudentAgenda);
+
+// POST /api/student/calendar/personal - Create personal event
 router.post("/calendar/personal", createPersonalEvent);
+
+// DELETE /api/student/calendar/personal/:id - Delete personal event
 router.delete("/calendar/personal/:id", deletePersonalEvent);
-router.post("/calendar/external", createExternalCourse); // Curso complementario
 
-router.get("/tutorings/available", getAvailableTutorings); // Ver lista
-router.post("/tutorings/book", bookTutoring);              // Reservar
+// POST /api/student/calendar/external - Create extracurricular course
+router.post("/calendar/external", createExternalCourse);
 
-// 🔥 NUEVAS RUTAS DE GESTIÓN ACADÉMICA
-//router.get("/catalog", checkJwt, getAllCourses);       // Ver todo
-// 👇 ESTA ES LA RUTA QUE FALTABA (EL 404) 👇
-router.get("/catalog/all", checkJwt, getAllCourses);
-router.post("/enroll", checkJwt, enrollCourse);        // Inscribirse
-router.delete("/enroll/:subjectId", checkJwt, leaveCourse); // Salir
+// =====================================================================
+// 4. TUTORING SYSTEM
+// =====================================================================
+// GET /api/student/tutorings/available - List available slots
+router.get("/tutorings/available", getAvailableTutorings);
 
-router.post("/history/register", checkJwt, registerHistoricalGrades);
+// POST /api/student/tutorings/book - Reserve a slot
+router.post("/tutorings/book", bookTutoring);
 
-router.get("/catalog/filters", checkJwt, getCatalogFilters); // Filtros (Carreras)
-router.get("/catalog/courses", checkJwt, getOpenCourses);    // Cursos filtrados
-router.post('/request-career', checkJwt, requestCareer)
+// =====================================================================
+// 5. ACADEMIC CATALOG & ENROLLMENT
+// =====================================================================
+// GET /api/student/catalog/filters - Get list of Careers for filtering
+router.get("/catalog/filters", getCatalogFilters);
 
-// 👇 RUTA CHAT IA
-router.post("/ai-chat", checkJwt, chatWithTutor);
+// GET /api/student/catalog/courses - Get open courses matching filters
+router.get("/catalog/courses", getOpenCourses);
+
+// GET /api/student/catalog/all - Full Academic Mesh + History status
+router.get("/catalog/all", getAllCourses);
+
+// POST /api/student/enroll - Enroll in a course (Active Period)
+router.post("/enroll", enrollCourse);
+
+// DELETE /api/student/enroll/:subjectId - Drop a course
+router.delete("/enroll/:subjectId", leaveCourse);
+
+// POST /api/student/history/register - Manual entry of past grades
+router.post("/history/register", registerHistoricalGrades);
+
+// POST /api/student/request-career - Request admin to assign a career
+router.post('/request-career', requestCareer);
+
+// =====================================================================
+// 6. AI ASSISTANT
+// =====================================================================
+// POST /api/student/ai-chat - Chat with Gemini Tutor
+router.post("/ai-chat", chatWithTutor);
 
 export { router };

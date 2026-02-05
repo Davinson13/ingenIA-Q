@@ -9,32 +9,44 @@ import {
 
 const router = Router();
 
-// Global Security Middleware: Validates JWT session
+// =====================================================================
+// MIDDLEWARE
+// =====================================================================
+// Enforce JWT validation for all admin routes
 router.use(checkJwt);
 
-// --- DASHBOARD ---
+// =====================================================================
+// 1. DASHBOARD
+// =====================================================================
+// GET /api/admin/dashboard/stats - Returns main KPIs (Users, Active Period, etc.)
 router.get("/dashboard/stats", getAdminDashboard);
 
-// --- PERIODS ---
-router.get("/periods", getPeriods);
-router.post("/periods", createPeriod); // Note: Make sure it's POST /periods or /period depending on your frontend
-router.post("/period", createPeriod); // Adding alias just in case frontend calls singular
-router.put("/period/:id", togglePeriodStatus); // Toggle Active/Inactive
-router.put("/period/data/:id", updatePeriod);  // Edit Name/Dates
-router.delete("/period/:id", deletePeriod);
+// =====================================================================
+// 2. ACADEMIC PERIODS MANAGEMENT
+// =====================================================================
+router.get("/periods", getPeriods);              // List all periods
+router.post("/periods", createPeriod);           // Create new period
+router.post("/period", createPeriod);            // Alias for creation
+router.put("/period/:id", togglePeriodStatus);   // Toggle Active/Inactive status
+router.put("/period/data/:id", updatePeriod);    // Edit dates/name
+router.delete("/period/:id", deletePeriod);      // Delete period (Cascade)
 
-// --- ACADEMIC STRUCTURE ---
-router.get("/academic/structure", getAcademicStructure);
-router.post("/academic/parallel", createParallel);
-router.post("/academic/schedule", addSchedule);
-router.put("/course/:id", updateCourse);
-router.delete("/course/:id", deleteCourse);
-router.delete("/schedule/:id", deleteSchedule);
+// =====================================================================
+// 3. ACADEMIC STRUCTURE (Courses & Schedules)
+// =====================================================================
+router.get("/academic/structure", getAcademicStructure); // Get full Career/Subject tree
+router.post("/academic/parallel", createParallel);       // Create a course instance (A, B)
+router.post("/academic/schedule", addSchedule);          // Add time block
+router.put("/course/:id", updateCourse);                 // Update teacher/capacity
+router.delete("/course/:id", deleteCourse);              // Delete course
+router.delete("/schedule/:id", deleteSchedule);          // Delete time block
 
-// --- USERS ---
-router.get("/users", getAdminUsers);
-router.post("/users/role", updateUserRole); // Legacy
-router.get("/users/careers", getCareersList);
-router.put("/users/:id", updateUser);
+// =====================================================================
+// 4. USER MANAGEMENT
+// =====================================================================
+router.get("/users", getAdminUsers);             // List all users
+router.get("/users/careers", getCareersList);    // Get list of careers for dropdown
+router.put("/users/:id", updateUser);            // Update user Role/Career
+router.post("/users/role", updateUserRole);      // Legacy: Update role only
 
 export { router };

@@ -9,7 +9,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 1. USUARIOS Y ROLES
+// --------------------------------------------------------
+// 1. USERS AND ROLES
+// --------------------------------------------------------
+
 enum Role {
   STUDENT
   TEACHER
@@ -18,31 +21,35 @@ enum Role {
 }
 
 model User {
-  id                  Int          @id @default(autoincrement())
-  email               String       @unique
-  password  String?  // Opcional porque con OAuth no hay password
-  fullName            String
-  role      String   @default("GUEST") // STUDENT, TEACHER, ADMIN, GUEST
+  id               Int      @id @default(autoincrement())
+  email            String   @unique
+  password         String?  // Optional: OAuth users won't have a password
+  fullName         String
+  role             String   @default("GUEST") // STUDENT, TEACHER, ADMIN, GUEST
   
-  isVerified       Boolean @default(false)
-  verificationCode String? // Código temporal para verificar email
-  provider         String  @default("LOCAL") // LOCAL, GOOGLE, GITHUB
-  createdAt           DateTime     @default(now())
-  updatedAt DateTime @updatedAt
+  isVerified       Boolean  @default(false)
+  verificationCode String?  // Temporary code for email verification
+  provider         String   @default("LOCAL") // LOCAL, GOOGLE, GITHUB
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   
-  // Relaciónes
+  // --- Relations ---
   careerId            Int?
-  career              Career?      @relation(fields: [careerId], references: [id])
-  currentSemester Int?     // Ej: 4
+  career              Career?           @relation(fields: [careerId], references: [id])
+  currentSemester     Int?              // e.g., 4
   enrollments         Enrollment[]
   teachingAssignments Parallel[]
-  tutoringsCreated Tutoring[] @relation("TeacherTutorings")
-  tutoringBookings TutoringBooking[]
-  activityGrades ActivityGrade[]
-  personalEvents PersonalEvent[]
-  externalCourses ExternalCourse[]
-  requestingCareer Boolean  @default(false)
+  tutoringsCreated    Tutoring[]        @relation("TeacherTutorings")
+  tutoringBookings    TutoringBooking[]
+  activityGrades      ActivityGrade[]
+  personalEvents      PersonalEvent[]
+  externalCourses     ExternalCourse[]
+  requestingCareer    Boolean           @default(false)
 }
+
+// --------------------------------------------------------
+// 2. ACADEMIC STRUCTURE
+// --------------------------------------------------------
 
 model Career {
   id             Int       @id @default(autoincrement())
@@ -62,11 +69,13 @@ model Subject {
   
   parallels     Parallel[]
   enrollments   Enrollment[]
-  
-  // --- AGREGA SOLO ESTA LÍNEA ---
-  tutorings     Tutoring[] 
+  tutorings     Tutoring[]   // Relation to Tutorings
 }
-// 3. GESTIÓN DE TIEMPO Y PERIODOS
+
+// --------------------------------------------------------
+// 3. TIME MANAGEMENT & PERIODS
+// --------------------------------------------------------
+
 model AcademicPeriod {
   id        Int        @id @default(autoincrement())
   name      String
@@ -79,7 +88,7 @@ model AcademicPeriod {
 
 model Parallel {
   id        Int            @id @default(autoincrement())
-  code      String
+  code      String         // e.g., "A", "B"
   capacity  Int            @default(30)
   
   subjectId Int
@@ -91,32 +100,35 @@ model Parallel {
   teacherId Int?
   teacher   User?          @relation(fields: [teacherId], references: [id])
   
-  schedules Schedule[]
-
+  schedules   Schedule[]
   events      Event[]
-  activities Activity[]
+  activities  Activity[]
   enrollments Enrollment[]
 
-  // NOTA: He quitado la relación 'enrollments' aquí temporalmente porque
-  // 'Enrollment' ahora está vinculado a 'Subject', no a 'Parallel'.
-  // Más adelante crearemos una tabla 'ClassRegistration' para la toma de horarios.
+  // Note: 'enrollments' relation here might need a separate 'ClassRegistration' 
+  // table later if managing specific schedule enrollments distinct from subject enrollment.
 
   @@unique([periodId, subjectId, code])
-
 }
 
-// 4. HORARIOS FIJOS
+// --------------------------------------------------------
+// 4. FIXED SCHEDULES
+// --------------------------------------------------------
+
 model Schedule {
   id         Int      @id @default(autoincrement())
-  dayOfWeek  Int
-  startTime  String
-  endTime    String
+  dayOfWeek  Int      // 1 = Monday, etc.
+  startTime  String   // HH:mm
+  endTime    String   // HH:mm
   
   parallelId Int
   parallel   Parallel @relation(fields: [parallelId], references: [id])
 }
 
-// 5. HISTORIAL ACADÉMICO (Enrollment Definitivo)
+// --------------------------------------------------------
+// 5. ACADEMIC HISTORY & ENROLLMENT
+// --------------------------------------------------------
+
 enum AcademicStatus {
   PENDING
   TAKING
@@ -127,7 +139,7 @@ enum AcademicStatus {
 model Enrollment {
   id         Int            @id @default(autoincrement())
   status     AcademicStatus @default(PENDING)
-  finalGrade Float?         // Nota final
+  finalGrade Float?         // Final grade for the subject
   
   userId     Int
   user       User           @relation(fields: [userId], references: [id])
@@ -135,10 +147,8 @@ model Enrollment {
   subjectId  Int
   subject    Subject        @relation(fields: [subjectId], references: [id])
 
-
-  parallelId Int?             // (Opcional por ahora para no romper datos viejos)
-  parallel   Parallel?        @relation(fields: [parallelId], references: [id])
-
+  parallelId Int?           // Optional to maintain backward compatibility
+  parallel   Parallel?      @relation(fields: [parallelId], references: [id])
 
   attendance Attendance[]
 
@@ -148,17 +158,17 @@ model Enrollment {
   @@unique([userId, subjectId]) 
 }
 
-// ... modelos anteriores ...
+// --------------------------------------------------------
+// 6. TUTORING SYSTEM
+// --------------------------------------------------------
 
-// Busca el modelo Tutoring y agrega esto:
 model Tutoring {
   id        Int      @id @default(autoincrement())
   date      DateTime
   capacity  Int
   notes     String?
   
-  // 👇 NUEVO CAMPO
-  modality  String   @default("PRESENCIAL") // "PRESENCIAL" o "VIRTUAL"
+  modality  String   @default("PRESENCIAL") // "PRESENCIAL" or "VIRTUAL"
 
   teacherId Int
   teacher   User     @relation("TeacherTutorings", fields: [teacherId], references: [id])
@@ -170,7 +180,7 @@ model Tutoring {
   createdAt DateTime @default(now())
 }
 
-// TABLA INTERMEDIA (Estudiantes inscritos en la tutoría)
+// Join Table: Students booked for a tutoring session
 model TutoringBooking {
   id         Int      @id @default(autoincrement())
   tutoringId Int
@@ -182,14 +192,16 @@ model TutoringBooking {
   createdAt  DateTime @default(now())
 }
 
-// --- NUEVOS MODELOS PARA ACTIVIDADES ---
+// --------------------------------------------------------
+// 7. ACTIVITIES & GRADING
+// --------------------------------------------------------
 
 model Activity {
   id          Int      @id @default(autoincrement())
-  name        String   // Ej: "Ensayo de Historia", "Examen 1"
+  name        String   // e.g., "History Essay", "Exam 1"
   description String?
   type        String   // INDIVIDUAL, GRUPAL, MEDIO, FINAL
-  maxScore    Float    // Ej: 7, 5, 2, 6
+  maxScore    Float    // e.g., 7, 5, 2, 6
   
   parallelId  Int
   parallel    Parallel @relation(fields: [parallelId], references: [id])
@@ -200,40 +212,43 @@ model Activity {
 }
 
 model ActivityGrade {
-  id             Int      @id @default(autoincrement())
-  score          Float?   
-  feedback       String? 
-  submissionLink String?  
+  id             Int       @id @default(autoincrement())
+  score          Float?    
+  feedback       String?   
+  submissionLink String?   
   submittedAt    DateTime? @default(now())
   
-  // Relación antigua (Opcional ahora)
-  activityId  Int?
-  activity    Activity? @relation(fields: [activityId], references: [id])
+  // Old Relation (Optional now)
+  activityId     Int?
+  activity       Activity? @relation(fields: [activityId], references: [id])
 
-  // Relación nueva (Con Eventos)
-  eventId     Int?
-  event       Event?    @relation(fields: [eventId], references: [id])
+  // New Relation (With Events)
+  eventId        Int?
+  event          Event?    @relation(fields: [eventId], references: [id])
   
-  studentId   Int
-  student     User      @relation(fields: [studentId], references: [id])
+  studentId      Int
+  student        User      @relation(fields: [studentId], references: [id])
   
-  createdAt   DateTime @default(now())
+  createdAt      DateTime  @default(now())
 
-  // Claves únicas para evitar duplicados
+  // Unique constraints to prevent duplicates
   @@unique([studentId, eventId])
   @@unique([activityId, studentId])
 }
 
-// 1. AGREGA ESTO AL FINAL DEL ARCHIVO
+// --------------------------------------------------------
+// 8. ATTENDANCE
+// --------------------------------------------------------
+
 model Attendance {
-  id           Int      @id @default(autoincrement())
-  date         DateTime @db.Date // Solo nos interesa la fecha
+  id           Int              @id @default(autoincrement())
+  date         DateTime         @db.Date // Only date matters, not time
   status       AttendanceStatus @default(PRESENT)
   
-  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id])
+  enrollment   Enrollment       @relation(fields: [enrollmentId], references: [id])
   enrollmentId Int
 
-  // Evita duplicados: Un estudiante solo puede tener una asistencia por día
+  // Prevent duplicates: A student can only have one attendance record per day per enrollment
   @@unique([date, enrollmentId]) 
 }
 
@@ -244,45 +259,50 @@ enum AttendanceStatus {
   EXCUSED
 }
 
-// 1. AGREGA ESTO AL FINAL
-model Event {
-  id          Int      @id @default(autoincrement())
-  title       String   // Ej: "Examen Parcial 1"
-  description String?
-  date        DateTime // Fecha y hora del evento
-  type        String   // INDIVIDUAL, GRUPAL, MEDIO, FINAL (Para saber a qué categoría pertenece)
+// --------------------------------------------------------
+// 9. EVENTS & CALENDAR
+// --------------------------------------------------------
 
+model Event {
+  id             Int             @id @default(autoincrement())
+  title          String          // e.g., "Midterm Exam 1"
+  description    String?
+  date           DateTime        // Event date and time
+  type           String          // INDIVIDUAL, GRUPAL, MEDIO, FINAL (Category)
 
   activityGrades ActivityGrade[]
-  parallel    Parallel @relation(fields: [parallelId], references: [id])
-  parallelId  Int
+  parallel       Parallel        @relation(fields: [parallelId], references: [id])
+  parallelId     Int
 }
 
-// --- EVENTOS PERSONALES / EXTRACURRICULARES ---
+// Personal / Extracurricular Events
 model PersonalEvent {
   id          Int      @id @default(autoincrement())
   title       String
   description String?
   date        DateTime
   
-  userId   Int
-  user     User     @relation(fields: [userId], references: [id])
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
 
   createdAt   DateTime @default(now())
 }
 
-// 3. AGREGA EL NUEVO MODELO PARA CURSOS COMPLEMENTARIOS
+// --------------------------------------------------------
+// 10. EXTERNAL COURSES
+// --------------------------------------------------------
+
 model ExternalCourse {
   id          Int      @id @default(autoincrement())
-  name        String   // Ej: "Curso de Inglés"
+  name        String   // e.g., "English Course"
   description String?
   
   startTime   String   // "14:00"
   endTime     String   // "16:00"
-  days        String   // "1,3,5" (Lunes, Miércoles, Viernes)
+  days        String   // "1,3,5" (Monday, Wednesday, Friday)
   
-  startDate   DateTime // Desde cuándo
-  endDate     DateTime // Hasta cuándo
+  startDate   DateTime // Start date
+  endDate     DateTime // End date
 
   studentId   Int
   student     User     @relation(fields: [studentId], references: [id])

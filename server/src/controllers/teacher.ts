@@ -4,22 +4,29 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 interface RequestWithUser extends Request {
-    user?: any;
+    user?: { id: number };
 }
 
 // =====================================================================
-// 1. DASHBOARD DOCENTE (CORREGIDO: FILTRA POR PERIODO ACTIVO)
+// 1. TEACHER DASHBOARD
 // =====================================================================
+
+/**
+ * Aggregates statistics for the Teacher Dashboard.
+ * Includes Active Courses, Total Students, Risk Students (Low Avg), and Pending Grades.
+ * Also generates a dynamic agenda combining today's classes and upcoming events.
+ */
 const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
     try {
-        const teacherId = parseInt(String(req.user.id));
+        const teacherId = parseInt(String(req.user?.id));
         const today = new Date();
-        const currentDayOfWeek = today.getDay(); // 0=Domingo, 1=Lunes...
+        const currentDayOfWeek = today.getDay(); // 0=Sunday
         today.setHours(0, 0, 0, 0);
 
-        // 1. BUSCAR PERIODO ACTIVO (CRÍTICO)
+        // 1. GET ACTIVE PERIOD (CRITICAL FILTER)
         const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
 
+        // If no period is active, return empty dashboard
         if (!activePeriod) {
             return res.send({
                 stats: { courses: 0, students: 0, pending: 0, risk: 0 },
@@ -28,12 +35,12 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
             });
         }
 
-        // 2. BUSCAR CURSOS (PARALELOS) SOLO DEL PERIODO ACTIVO
-        // Incluimos 'schedules' para poder armar la agenda de clases de hoy
+        // 2. FETCH COURSES (Active Period Only)
+        // Include schedules to build today's agenda
         const courses = await prisma.parallel.findMany({
             where: { 
                 teacherId: teacherId,
-                periodId: activePeriod.id // 🔥 FILTRO DE ORO: Solo periodo actual
+                periodId: activePeriod.id // 🔥 GOLDEN FILTER
             },
             include: { 
                 subject: true, 
@@ -44,7 +51,7 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
 
         const totalCourses = courses.length;
 
-        // 3. ESTADÍSTICAS
+        // 3. CALCULATE STATISTICS
         const courseStats = await Promise.all(courses.map(async (c) => {
             const studentCount = await prisma.enrollment.count({
                 where: { 
@@ -52,11 +59,14 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
                     status: 'TAKING' 
                 }
             });
+            
+            // Calculate Average Grade for Course
             const grades = await prisma.activityGrade.findMany({
                 where: { event: { parallelId: c.id }, score: { not: null } }, select: { score: true }
             });
             const sum = grades.reduce((acc, g) => acc + (g.score || 0), 0);
             const avg = grades.length > 0 ? (sum / grades.length) : 0;
+            
             return { 
                 id: c.id, 
                 name: c.subject.name, 
@@ -67,8 +77,11 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
         }));
 
         const totalStudents = courseStats.reduce((acc, c) => acc + c.students, 0);
+        
+        // Risk = Average grade below 14/20
         const riskCount = courseStats.filter(c => c.average > 0 && c.average < 14).length;
         
+        // Pending Grades: Submissions that have no score yet
         const pendingGrades = await prisma.activityGrade.count({
             where: { 
                 event: { parallel: { teacherId: teacherId, periodId: activePeriod.id } }, 
@@ -77,15 +90,15 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
             }
         });
 
-        // 4. 🔥 AGENDA DINÁMICA (Clases de Hoy + Eventos)
+        // 4. 🔥 DYNAMIC AGENDA (Classes Today + Upcoming Events)
 
-        // A. Generar "Clases de Hoy" basado en los horarios del admin
+        // A. Generate "Today's Classes" from schedule rules
         const todaysClasses = courses.flatMap(course => {
             return course.schedules
                 .filter(s => s.dayOfWeek === currentDayOfWeek)
                 .map(s => ({
                     id: `class-${course.id}-${s.id}`,
-                    title: `Clase: ${course.subject.name} (${course.code})`,
+                    title: `Class: ${course.subject.name} (${course.code})`,
                     date: new Date().toISOString(),
                     time: `${s.startTime} - ${s.endTime}`,
                     type: "CLASE",
@@ -95,7 +108,7 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
                 }));
         });
 
-        // B. Eventos Académicos
+        // B. Academic Events (Exams/Homework)
         const academicEvents = await prisma.event.findMany({
             where: { 
                 parallel: { teacherId: teacherId, periodId: activePeriod.id }, 
@@ -104,13 +117,13 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
             include: { parallel: { include: { subject: true } } }
         });
 
-        // C. Tutorías
+        // C. Tutoring Sessions
         const tutoringEvents = await prisma.tutoring.findMany({
             where: { teacherId: teacherId, date: { gte: today } },
             include: { subject: true }
         });
 
-        // D. Mezclar todo
+        // D. Merge and Sort
         const mixedEvents = [
             ...todaysClasses,
             ...academicEvents.map(evt => ({
@@ -124,15 +137,15 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
             })),
             ...tutoringEvents.map(tut => ({
                 id: tut.id,
-                title: "Tutoría: " + (tut.notes || "General"),
+                title: "Tutoring: " + (tut.notes || "General"),
                 date: tut.date,
                 type: "TUTORIA",
-                courseName: tut.subject ? tut.subject.name : "Todas las materias",
+                courseName: tut.subject ? tut.subject.name : "All Subjects",
                 isTutoring: true,
                 isClass: false
             }))
         ].sort((a: any, b: any) => {
-            if (a.isClass && !b.isClass) return -1; // Clases primero
+            if (a.isClass && !b.isClass) return -1; // Classes first
             if (!a.isClass && b.isClass) return 1;
             return new Date(a.date).getTime() - new Date(b.date).getTime();
         }).slice(0, 7);
@@ -150,11 +163,15 @@ const getTeacherDashboard = async (req: RequestWithUser, res: Response) => {
 };
 
 // =====================================================================
-// 2. TUTORÍAS
+// 2. TUTORING MANAGEMENT
 // =====================================================================
+
+/**
+ * Creates a new Tutoring Session (Virtual or In-Person).
+ */
 const createTutoring = async (req: RequestWithUser, res: Response) => {
     try {
-        const teacherId = parseInt(String(req.user.id));
+        const teacherId = parseInt(String(req.user?.id));
         const { date, time, subjectId, capacity, notes, modality } = req.body;
 
         const dateTimeString = `${date}T${time}:00.000Z`;
@@ -176,7 +193,7 @@ const createTutoring = async (req: RequestWithUser, res: Response) => {
 
 const getTutorings = async (req: RequestWithUser, res: Response) => {
     try {
-        const teacherId = parseInt(String(req.user.id));
+        const teacherId = parseInt(String(req.user?.id));
         const tutorings = await prisma.tutoring.findMany({
             where: { teacherId: teacherId },
             include: { subject: true, bookings: { include: { student: true } } },
@@ -197,11 +214,11 @@ const getTutorings = async (req: RequestWithUser, res: Response) => {
 };
 
 // =====================================================================
-// 3. MIS CURSOS (Solo Activos)
+// 3. MY COURSES (Active Only)
 // =====================================================================
 const getTeacherCourses = async (req: RequestWithUser, res: Response) => {
     try {
-        const teacherId = parseInt(String(req.user.id));
+        const teacherId = parseInt(String(req.user?.id));
         const activePeriod = await prisma.academicPeriod.findFirst({ where: { isActive: true } });
 
         if (!activePeriod) return res.send([]); 
@@ -209,7 +226,7 @@ const getTeacherCourses = async (req: RequestWithUser, res: Response) => {
         const courses = await prisma.parallel.findMany({
             where: { 
                 teacherId: teacherId, 
-                periodId: activePeriod.id // 🔥 Filtro clave
+                periodId: activePeriod.id 
             },
             include: { subject: true, schedules: true }, 
             orderBy: { subject: { name: 'asc' } }
@@ -218,27 +235,27 @@ const getTeacherCourses = async (req: RequestWithUser, res: Response) => {
         const data = courses.map(c => ({
             ...c,
             name: c.subject.name,
-            description: `Paralelo ${c.code}`,
-            scheduleInfo: c.schedules.length > 0 ? `${c.schedules[0].startTime} - ${c.schedules[0].endTime}` : "Sin horario"
+            description: `Parallel ${c.code}`,
+            scheduleInfo: c.schedules.length > 0 ? `${c.schedules[0].startTime} - ${c.schedules[0].endTime}` : "No Schedule"
         }));
         res.send(data);
     } catch (e) { res.status(500).send("ERROR_GETTING_COURSES"); }
 };
 
 // =====================================================================
-// 4. DETALLE DE CURSO Y NOTAS
+// 4. COURSE DETAILS & GRADING
 // =====================================================================
 const getCourseGrades = async (req: RequestWithUser, res: Response) => {
     try {
         const { courseId } = req.params;
         const idParseado = parseInt(String(courseId));
-        if (isNaN(idParseado)) { res.status(400).send("ID_INVALIDO"); return; }
+        if (isNaN(idParseado)) { return res.status(400).send("INVALID_ID"); }
 
         const parallel = await prisma.parallel.findUnique({
             where: { id: idParseado },
             include: { subject: true }
         });
-        if (!parallel) { res.status(404).send("CURSO_NO_ENCONTRADO"); return; }
+        if (!parallel) { return res.status(404).send("COURSE_NOT_FOUND"); }
         res.send({ courseName: parallel.subject.name, parallelCode: parallel.code });
     } catch (e) { res.status(500).send("ERROR"); }
 };
@@ -247,13 +264,13 @@ const getActivityGrades = async (req: RequestWithUser, res: Response) => {
     try {
         const { activityId } = req.params;
         const eventId = parseInt(String(activityId));
-        if (isNaN(eventId)) { res.status(400).send("ID INVALIDO"); return; }
+        if (isNaN(eventId)) { return res.status(400).send("INVALID_ID"); }
 
         const event = await prisma.event.findUnique({
             where: { id: eventId },
             include: { parallel: { include: { subject: true } } }
         });
-        if (!event) return res.status(404).send("Actividad no encontrada");
+        if (!event) return res.status(404).send("Activity not found");
 
         const enrollments = await prisma.enrollment.findMany({
             where: {
@@ -310,14 +327,18 @@ const saveActivityGrade = async (req: RequestWithUser, res: Response) => {
     } catch (e) { res.status(500).send("ERROR_SAVING_GRADE"); }
 };
 
+/**
+ * Calculates the Grade Matrix for a Course.
+ * Rows: Students, Cols: Weighted Categories (Individual, Group, Midterm, Final).
+ */
 const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
     try {
         const { courseId } = req.params;
         const parallelId = parseInt(String(courseId));
-        if (isNaN(parallelId)) { res.status(400).send("ID INVALIDO"); return; }
+        if (isNaN(parallelId)) { return res.status(400).send("INVALID_ID"); }
 
         const parallel = await prisma.parallel.findUnique({ where: { id: parallelId } });
-        if (!parallel) return res.status(404).send("Curso no encontrado");
+        if (!parallel) return res.status(404).send("Course not found");
 
         const enrollments = await prisma.enrollment.findMany({
             where: {
@@ -358,6 +379,7 @@ const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
                 finalTotal += weighted;
             });
 
+            // Attendance Calculation
             const studentAtt = allAttendance.filter(a => a.enrollmentId === enr.id);
             let totalPoints = 0;
             let maxPoints = studentAtt.length * 2;
@@ -385,17 +407,17 @@ const getCourseGradeMatrix = async (req: RequestWithUser, res: Response) => {
 };
 
 // =====================================================================
-// 5. ASISTENCIA Y BAJA DE ALUMNOS
+// 5. ATTENDANCE & DROPPING STUDENTS
 // =====================================================================
 const getDailyAttendance = async (req: RequestWithUser, res: Response) => {
     try {
         const { courseId } = req.query;
         const dateStr = String(req.query.date);
         const parallelId = parseInt(String(courseId));
-        if (!courseId || !dateStr) { res.status(400).send("Faltan datos"); return; }
+        if (!courseId || !dateStr) { return res.status(400).send("Missing data"); }
 
         const parallel = await prisma.parallel.findUnique({ where: { id: parallelId } });
-        if (!parallel) { res.status(404).send("Paralelo no encontrado"); return; }
+        if (!parallel) { return res.status(404).send("Parallel not found"); }
 
         const enrollments = await prisma.enrollment.findMany({
             where: {
@@ -436,7 +458,7 @@ const saveDailyAttendance = async (req: RequestWithUser, res: Response) => {
         today.setHours(0, 0, 0, 0);
         selectedDate.setHours(0, 0, 0, 0);
 
-        if (selectedDate > today) { res.status(400).send("No puedes marcar asistencia en fechas futuras."); return; }
+        if (selectedDate > today) { return res.status(400).send("Cannot save attendance for future dates."); }
 
         const dateObj = new Date(`${date}T12:00:00.000Z`);
         await Promise.all(records.map((r: any) => {
@@ -446,7 +468,7 @@ const saveDailyAttendance = async (req: RequestWithUser, res: Response) => {
                 create: { enrollmentId: r.enrollmentId, date: dateObj, status: r.status }
             });
         }));
-        res.send({ message: "Guardado correctamente" });
+        res.send({ message: "Saved successfully" });
     } catch (e) { res.status(500).send("ERROR_SAVING_ATTENDANCE"); }
 };
 
@@ -461,23 +483,23 @@ const updateStudentGrade = async (req: RequestWithUser, res: Response) => {
     } catch (e) { res.status(500).send("ERROR_UPDATING_GRADE"); }
 };
 
-// 🟢 4. EXPULSAR ALUMNO (VERSIÓN SEGURA)
+// 🟢 4. REMOVE STUDENT (SAFE DELETE)
 const removeStudent = async (req: Request, res: Response) => {
     try {
         const { subjectId, studentId } = req.body;
-        if (!subjectId || !studentId) return res.status(400).json({ error: "Faltan datos" });
+        if (!subjectId || !studentId) return res.status(400).json({ error: "Missing data" });
 
         const pId = parseInt(String(subjectId));
         const sId = parseInt(String(studentId));
 
-        if (isNaN(pId) || isNaN(sId)) return res.status(400).json({ error: "IDs inválidos" });
+        if (isNaN(pId) || isNaN(sId)) return res.status(400).json({ error: "Invalid IDs" });
 
         const parallel = await prisma.parallel.findUnique({
             where: { id: pId },
             select: { subjectId: true }
         });
 
-        if (!parallel) return res.status(404).json({ error: "Curso no encontrado." });
+        if (!parallel) return res.status(404).json({ error: "Course not found." });
 
         const deleted = await prisma.enrollment.deleteMany({
             where: {
@@ -489,10 +511,10 @@ const removeStudent = async (req: Request, res: Response) => {
             }
         });
 
-        if (deleted.count === 0) return res.status(404).json({ error: "Estudiante no encontrado en este curso." });
+        if (deleted.count === 0) return res.status(404).json({ error: "Student not found in this course." });
 
-        res.json({ message: "Estudiante eliminado correctamente." });
-    } catch (error) { res.status(500).json({ error: "Error interno al eliminar." }); }
+        res.json({ message: "Student removed successfully." });
+    } catch (error) { res.status(500).json({ error: "Internal error removing student." }); }
 };
 
 export {
