@@ -5,6 +5,7 @@ import {
     ChevronLeft, ChevronRight, Plus, Calendar as CalIcon,
     BookOpen, GraduationCap, Users, Star, Clock, Globe
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -83,19 +84,19 @@ export const CalendarPage = () => {
         const now = new Date();
 
         if (selectedDate < now) {
-            alert("⚠️ You cannot add activities in the past. Please check the date and time.");
+            toast.warning("⚠️ You cannot add activities in the past. Please check the date and time.");
             return;
         }
 
         try {
             await api.post('/student/calendar/personal', extraForm);
-            alert("✅ Activity created successfully");
+            toast.success("✅ Activity created successfully");
             setShowExtraModal(false);
             setExtraForm({ title: '', description: '', date: '', time: '' }); // Reset form
             fetchEvents();
         } catch (error) {
             console.error(error);
-            alert("❌ Error creating activity");
+            toast.error("❌ Error creating activity");
         }
     };
 
@@ -110,31 +111,31 @@ export const CalendarPage = () => {
         today.setHours(0, 0, 0, 0);
 
         if (start < today) {
-            alert("⚠️ The course cannot start on a past date.");
+            toast.warning("⚠️ The course cannot start on a past date.");
             return;
         }
 
         // VALIDATION 2: Date Logic
         if (courseForm.endDate < courseForm.startDate) {
-            alert("⚠️ End date cannot be before start date.");
+            toast.warning("⚠️ End date cannot be before start date.");
             return;
         }
 
         // VALIDATION 3: Time Logic
         if (courseForm.startTime >= courseForm.endTime) {
-            alert("⚠️ End time must be after start time.");
+            toast.warning("⚠️ End time must be after start time.");
             return;
         }
 
         try {
             await api.post('/student/calendar/external', courseForm);
-            alert("✅ Extra course added successfully");
+            toast.success("✅ Extra course added successfully");
             setShowCourseModal(false);
             setCourseForm({ name: '', startTime: '', endTime: '', startDate: '', endDate: '', days: [] }); // Reset
             fetchEvents();
         } catch (error) {
             console.error(error);
-            alert("❌ Error creating course");
+            toast.error("❌ Error creating course");
         }
     };
 

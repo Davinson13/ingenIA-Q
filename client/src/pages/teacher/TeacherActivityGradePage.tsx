@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
     ArrowLeft, Save, ExternalLink, Calendar, RefreshCw, AlertTriangle, CheckCircle, MessageSquare
 } from 'lucide-react';
+import { toast } from 'sonner'; // Import toast
 
 import api from '../../api/axios';
 
@@ -61,7 +62,7 @@ export const TeacherActivityGradePage = () => {
             setStudents(mappedStudents);
         } catch (error) {
             console.error(error);
-            alert("Error loading data.");
+            toast.error("Error loading data.");
         } finally {
             setLoading(false);
         }
@@ -89,7 +90,7 @@ export const TeacherActivityGradePage = () => {
         const cleanScore = String(student.score).replace(',', '.');
 
         if (cleanScore !== '' && (parseFloat(cleanScore) < 0 || parseFloat(cleanScore) > 20)) {
-            alert("Grade must be between 0 and 20");
+            toast.warning("Grade must be between 0 and 20");
             return;
         }
 
@@ -100,11 +101,11 @@ export const TeacherActivityGradePage = () => {
                 feedback: student.feedback // Sending feedback
             });
 
-            alert(`✅ Grade saved for ${student.fullName}`);
+            toast.success(`✅ Grade saved for ${student.fullName}`);
             loadData();
         } catch (error) {
             console.error(error);
-            alert("❌ Error saving grade");
+            toast.error("❌ Error saving grade");
         }
     };
 

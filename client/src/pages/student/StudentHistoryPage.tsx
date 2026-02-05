@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { Save, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -30,7 +31,10 @@ export const StudentHistoryPage = () => {
     useEffect(() => {
         api.get<Subject[]>('/student/catalog/all')
             .then(res => setSubjects(res.data))
-            .catch(err => console.error("Error fetching subjects:", err))
+            .catch(err => {
+                console.error("Error fetching subjects:", err);
+                toast.error("Failed to load subjects history");
+            })
             .finally(() => setLoading(false));
     }, []);
 
@@ -43,22 +47,44 @@ export const StudentHistoryPage = () => {
 
     /**
      * Submits the entered grades to the backend.
+     * REPLACED alert/confirm with toast promise and action.
      */
-    const handleSave = async () => {
-        if (!confirm("Confirm registration? This will update your academic curriculum status.")) return;
-        
+    const handleSave = () => {
         // Prepare payload: filter empty inputs and convert to numbers
         const payload = Object.entries(grades)
             .filter(([_, val]) => val !== "")
             .map(([id, val]) => ({ subjectId: parseInt(id), grade: parseFloat(val) }));
 
-        try {
-            await api.post('/student/history/register', { grades: payload });
-            alert("✅ History updated successfully.");
-            window.location.reload();
-        } catch { 
-            alert("Error saving data."); 
+        if (payload.length === 0) {
+            toast.warning("Please enter at least one grade to save.");
+            return;
         }
+
+        toast("Confirm registration?", {
+            description: "This will update your academic curriculum status.",
+            action: {
+                label: "Save Changes",
+                onClick: () => {
+                    // Use toast.promise for loading/success/error feedback
+                    toast.promise(
+                        api.post('/student/history/register', { grades: payload }),
+                        {
+                            loading: 'Updating academic history...',
+                            success: () => {
+                                // Reload page after short delay to reflect changes
+                                setTimeout(() => window.location.reload(), 1000);
+                                return "✅ History updated successfully.";
+                            },
+                            error: "❌ Error saving data."
+                        }
+                    );
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
+            }
+        });
     };
 
     if (loading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin text-slate-400" /></div>;

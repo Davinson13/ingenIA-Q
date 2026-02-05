@@ -4,6 +4,7 @@ import {
     Search, Clock, MapPin, Monitor,
     User, BookOpen, CheckCircle2, AlertCircle
 } from 'lucide-react';
+import { toast } from 'sonner'; // Import toast
 
 import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
@@ -45,6 +46,7 @@ export const StudentTutoringPage = () => {
             setTutorings(res.data);
         } catch (error) {
             console.error("Error fetching tutorings:", error);
+            toast.error("Failed to load tutoring sessions");
         } finally {
             setLoading(false);
         }
@@ -54,20 +56,31 @@ export const StudentTutoringPage = () => {
 
     /**
      * Handles booking a tutoring session.
+     * REPLACED window.confirm/alert with toast action.
      */
-    const handleBook = async (id: number) => {
-        if (!window.confirm("Confirm booking for this tutoring session?")) return;
-        
-        try {
-            await api.post('/student/tutorings/book', { tutoringId: id });
-            alert("✅ Booking confirmed! It will appear in your calendar.");
-            fetchTutorings(); // Reload to update remaining spots
-        } catch (error: unknown) {
-            // Type-safe error handling
-            const err = error as AxiosError<{ error: string }>;
-            const msg = err.response?.data?.error || "Error booking session";
-            alert("❌ " + msg);
-        }
+    const handleBook = (id: number) => {
+        toast("Confirm booking?", {
+            description: "This session will be added to your calendar.",
+            action: {
+                label: "Confirm",
+                onClick: async () => {
+                    try {
+                        await api.post('/student/tutorings/book', { tutoringId: id });
+                        toast.success("✅ Booking confirmed! Check your calendar.");
+                        fetchTutorings(); // Reload to update remaining spots
+                    } catch (error: unknown) {
+                        // Type-safe error handling
+                        const err = error as AxiosError<{ error: string }>;
+                        const msg = err.response?.data?.error || "Error booking session";
+                        toast.error("❌ " + msg);
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
+            }
+        });
     };
 
     // Filter Logic

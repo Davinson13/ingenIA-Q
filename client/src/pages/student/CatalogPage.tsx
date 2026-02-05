@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AxiosError } from 'axios';
 import { BookOpen, Filter, Layers, User, LogOut } from 'lucide-react';
+import { toast } from 'sonner'; // Importar toast
 import api from '../../api/axios';
 
 // --- INTERFACES ---
@@ -63,6 +64,7 @@ export const CatalogPage = () => {
         } catch (error: unknown) {
             console.error("Error searching courses:", error);
             setMsg("Error loading courses.");
+            toast.error("Failed to load courses");
         } finally {
             setLoading(false);
         }
@@ -79,51 +81,73 @@ export const CatalogPage = () => {
 
     /**
      * Handles student enrollment in a course.
+     * REPLACED confirm() with toast action.
      * @param parallelId - The ID of the specific course parallel.
      */
-    const handleEnroll = async (parallelId: number) => {
-        if (!confirm("Confirm enrollment in this course?")) return;
-        
-        try {
-            await api.post('/student/enroll', { parallelId });
-            alert("✅ Enrollment successful!");
-            searchCourses(); // Reload to update capacity and status
-        } catch (error: unknown) {
-            // Type-safe error handling for Axios
-            if (error && typeof error === 'object' && 'response' in error) {
-                const err = error as AxiosError<{ error: string }>;
-                alert(err.response?.data?.error || "Failed to enroll.");
-            } else {
-                alert("An unexpected error occurred.");
+    const handleEnroll = (parallelId: number) => {
+        toast("Confirm enrollment?", {
+            description: "You are about to join this course.",
+            action: {
+                label: "Confirm",
+                onClick: async () => {
+                    try {
+                        await api.post('/student/enroll', { parallelId });
+                        toast.success("✅ Enrollment successful!");
+                        searchCourses(); // Reload to update capacity and status
+                    } catch (error: unknown) {
+                        // Type-safe error handling for Axios
+                        if (error && typeof error === 'object' && 'response' in error) {
+                            const err = error as AxiosError<{ error: string }>;
+                            toast.error(err.response?.data?.error || "Failed to enroll.");
+                        } else {
+                            toast.error("An unexpected error occurred.");
+                        }
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
             }
-        }
+        });
     };
 
     /**
      * Handles removing enrollment (dropping a course).
+     * REPLACED confirm() with toast action.
      * Attempts to delete via parallel ID first, then falls back to subject ID cleanup if needed.
      */
-    const handleUnenroll = async (parallelId: number, subjectId: number) => {
-        if (!confirm("Are you sure you want to drop this course?")) return;
-        
-        try {
-            // Try deleting by specific enrollment/parallel ID
-            await api.delete(`/student/enroll/${parallelId}`);
-            alert("✅ You have dropped the course.");
-            searchCourses(); 
-        } catch (error: unknown) {
-            // Fallback: Clean up via Subject ID (handles "zombie" records if parallel mismatch)
-            console.warn("Primary delete failed, attempting fallback cleanup...", error);
-            
-            try {
-                await api.delete(`/student/enroll/${subjectId}`);
-                alert("✅ Registration record cleared.");
-                searchCourses();
-            } catch (e: unknown) {
-                console.error("Fallback failed:", e);
-                alert("Failed to drop course.");
+    const handleUnenroll = (parallelId: number, subjectId: number) => {
+        toast("Drop this course?", {
+            description: "Are you sure you want to unenroll?",
+            action: {
+                label: "Drop Course",
+                onClick: async () => {
+                    try {
+                        // Try deleting by specific enrollment/parallel ID
+                        await api.delete(`/student/enroll/${parallelId}`);
+                        toast.success("✅ You have dropped the course.");
+                        searchCourses(); 
+                    } catch (error: unknown) {
+                        // Fallback: Clean up via Subject ID (handles "zombie" records if parallel mismatch)
+                        console.warn("Primary delete failed, attempting fallback cleanup...", error);
+                        
+                        try {
+                            await api.delete(`/student/enroll/${subjectId}`);
+                            toast.success("✅ Registration record cleared.");
+                            searchCourses();
+                        } catch (e: unknown) {
+                            console.error("Fallback failed:", e);
+                            toast.error("Failed to drop course.");
+                        }
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
             }
-        }
+        });
     };
 
     // Generate array of semesters (1 to N) based on selected career

@@ -2,11 +2,11 @@
   "name": "server",
   "version": "1.0.0",
   "description": "Backend for IngenIA-Q",
-  "main": "dist/src/app.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "dev": "nodemon src/app.ts",
     "build": "tsc",
-    "start": "node dist/src/app.js",
+    "start": "node dist/src/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

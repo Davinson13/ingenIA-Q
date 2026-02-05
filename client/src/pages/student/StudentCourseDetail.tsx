@@ -8,6 +8,7 @@ import {
     CircleCheck, CircleX, CircleAlert,
     ExternalLink, Send, BookOpen, MessageSquare, Percent, LogOut
 } from 'lucide-react';
+import { toast } from 'sonner'; // Importar toast
 
 // --- UTILITY: UTC DATE FORMATTER (ENGLISH) ---
 const formatDateUTC = (dateString: string) => {
@@ -120,6 +121,7 @@ export const StudentCourseDetail = () => {
         } catch (err: unknown) {
             console.error(err);
             setError("Could not load course information.");
+            toast.error("Failed to load course details");
         } finally {
             setLoading(false);
         }
@@ -131,6 +133,7 @@ export const StudentCourseDetail = () => {
 
     /**
      * Handles assignment submission.
+     * REPLACED alert() with toast.success/error
      */
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -138,13 +141,13 @@ export const StudentCourseDetail = () => {
         setSubmitting(true);
         try {
             await api.post('/student/submit', { activityId: selectedActivity, link: linkInput });
-            alert("✅ Assignment submitted successfully");
+            toast.success("✅ Assignment submitted successfully");
             setShowModal(false);
             setLinkInput("");
             fetchData();
         } catch (e) {
             console.error(e);
-            alert("❌ Error submitting assignment");
+            toast.error("❌ Error submitting assignment");
         } finally {
             setSubmitting(false);
         }
@@ -158,26 +161,36 @@ export const StudentCourseDetail = () => {
 
     /**
      * Handles dropping the course.
+     * REPLACED confirm() with toast action.
      */
-    const handleLeaveCourse = async () => {
-        if (!confirm("⚠️ Are you sure you want to drop this course?\nYou will lose your progress and grades.")) return;
-
-        try {
-            // id comes from useParams()
-            await api.delete(`/student/enroll/${id}`);
-
-            alert("You have successfully dropped the course.");
-            navigate('/dashboard/subjects'); // Redirect to my subjects
-        } catch (error: unknown) {
-            console.error(error);
-            // Type-safe error handling
-            if (error && typeof error === 'object' && 'response' in error) {
-                const err = error as AxiosError<{ error: string }>;
-                alert(err.response?.data?.error || "Error dropping course");
-            } else {
-                alert("Error dropping course");
+    const handleLeaveCourse = () => {
+        toast("⚠️ Drop this course?", {
+            description: "Are you sure? You will lose your progress and grades.",
+            action: {
+                label: "Drop Course",
+                onClick: async () => {
+                    try {
+                        // id comes from useParams()
+                        await api.delete(`/student/enroll/${id}`);
+                        toast.success("You have successfully dropped the course.");
+                        navigate('/dashboard/subjects'); // Redirect to my subjects
+                    } catch (error: unknown) {
+                        console.error(error);
+                        // Type-safe error handling
+                        if (error && typeof error === 'object' && 'response' in error) {
+                            const err = error as AxiosError<{ error: string }>;
+                            toast.error(err.response?.data?.error || "Error dropping course");
+                        } else {
+                            toast.error("Error dropping course");
+                        }
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
             }
-        }
+        });
     };
 
     // Auto-open modal if navigated from dashboard notification
@@ -376,7 +389,7 @@ export const StudentCourseDetail = () => {
                                         att.status === 'LATE' ? 'bg-yellow-50 border-yellow-200 text-yellow-700' :
                                             att.status === 'EXCUSED' ? 'bg-blue-50 border-blue-200 text-blue-700' :
                                                 'bg-red-50 border-red-200 text-red-700'
-                                    }`}>
+                                        }`}>
                                         {att.status === 'PRESENT' ? 'PRESENT' : att.status === 'LATE' ? 'LATE' : att.status === 'EXCUSED' ? 'EXCUSED' : 'ABSENT'}
                                     </span>
                                 </div>
