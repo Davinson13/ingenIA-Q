@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { AxiosError } from 'axios';
 import { 
     User as UserIcon, Lock, Save, Trash2, 
-    AlertTriangle, CheckCircle, Shield, 
+    AlertTriangle, Shield, 
     Mail, GraduationCap, Building2, Loader2,
     Hand, Clock
 } from 'lucide-react';
 
+import { toast } from 'sonner'; // Import toast
 import api from '../../api/axios';
 import { useAuthStore } from '../../store/authStore';
 import { getTheme } from '../../utils/themeUtils';
@@ -53,7 +54,6 @@ export const ProfilePage = () => {
     });
 
     const [isSaving, setIsSaving] = useState(false);
-    const [msg, setMsg] = useState({ type: '', text: '' });
 
     // --- Initial Data Fetch ---
     useEffect(() => {
@@ -66,6 +66,7 @@ export const ProfilePage = () => {
                 setFormData(prev => ({ ...prev, fullName: data.user.fullName }));
             } catch (error) {
                 console.error("Error fetching profile:", error);
+                toast.error("Failed to load profile data.");
             } finally {
                 setLoadingData(false);
             }
@@ -84,13 +85,13 @@ export const ProfilePage = () => {
     const handleRequestCareer = async () => {
         try {
             await api.post('/student/request-career');
-            alert("✅ Request sent to Administrator.");
+            toast.success("✅ Request sent to Administrator.");
             
             // Update local state to reflect change immediately
             setFullData((prev) => prev ? ({ ...prev, requestingCareer: true }) : null);
-        } catch (error: unknown) { // ✅ Fixed: Explicitly typed 'error'
+        } catch (error: unknown) {
             console.error(error); 
-            alert("Failed to send request.");
+            toast.error("Failed to send request.");
         }
     };
 
@@ -100,7 +101,6 @@ export const ProfilePage = () => {
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsSaving(true);
-        setMsg({ type: '', text: '' });
 
         try {
             const payload: Record<string, string> = { fullName: formData.fullName };
@@ -108,7 +108,7 @@ export const ProfilePage = () => {
             // Password change logic validation
             if (formData.newPassword) {
                 if (!formData.currentPassword) {
-                    setMsg({ type: 'error', text: 'Current password is required to set a new one.' });
+                    toast.error('Current password is required to set a new one.');
                     setIsSaving(false);
                     return;
                 }
@@ -116,16 +116,15 @@ export const ProfilePage = () => {
                 payload.newPassword = formData.newPassword;
             }
 
-            // ✅ FIXED: Explicitly casting the response data
             const res = await api.put('/user/profile', payload);
-            const data = res.data as ApiResponse; // Explicit type assertion
+            const data = res.data as ApiResponse; 
             
             // Update global auth store if token exists
             const currentToken = useAuthStore.getState().token;
             if (currentToken) login(currentToken, data.user);
             
             setFullData(data.user);
-            setMsg({ type: 'success', text: 'Profile updated successfully.' });
+            toast.success('Profile updated successfully.');
             
             // Clear sensitive fields
             setFormData(prev => ({ ...prev, currentPassword: '', newPassword: '' }));
@@ -133,7 +132,7 @@ export const ProfilePage = () => {
         } catch (error: unknown) {
             // Type-safe error handling
             const err = error as AxiosError<{ error: string }>;
-            setMsg({ type: 'error', text: err.response?.data?.error || 'Failed to update profile.' });
+            toast.error(err.response?.data?.error || 'Failed to update profile.');
         } finally {
             setIsSaving(false);
         }
@@ -141,17 +140,31 @@ export const ProfilePage = () => {
 
     /**
      * Handles account deletion.
+     * Replaced confirm() with a toast action for better UX.
      */
-    const handleDelete = async () => {
-        if (!confirm("🚨 ARE YOU SURE? This action cannot be undone and your data will be lost.")) return;
-        try {
-            await api.delete('/user/profile');
-            logout();
-            navigate('/login');
-        } catch (error: unknown) { // ✅ Fixed: Explicitly typed 'error'
-            console.error(error);
-            alert("Failed to delete account."); 
-        }
+    const handleDelete = () => {
+        toast("🚨 Delete Account?", {
+            description: "This action cannot be undone. All your data will be lost permanently.",
+            action: {
+                label: "Delete Forever",
+                onClick: async () => {
+                    try {
+                        await api.delete('/user/profile');
+                        toast.success("Account deleted. Goodbye!");
+                        logout();
+                        navigate('/login');
+                    } catch (error: unknown) { 
+                        console.error(error);
+                        toast.error("Failed to delete account."); 
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {} // Prevents TS error
+            },
+            duration: 8000, // Longer duration for critical actions
+        });
     };
 
     const isGoogleUser = displayUser?.provider === 'GOOGLE' || displayUser?.provider === 'GITHUB';
@@ -239,14 +252,6 @@ export const ProfilePage = () => {
                     </div>
                 </div>
             </div>
-
-            {/* ALERTS */}
-            {msg.text && (
-                <div className={`p-4 rounded-xl flex items-center gap-3 font-bold shadow-sm ${msg.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {msg.type === 'success' ? <CheckCircle size={24} /> : <AlertTriangle size={24} />}
-                    <span>{msg.text}</span>
-                </div>
-            )}
 
             {/* EDIT FORM */}
             <div className="grid md:grid-cols-3 gap-8">

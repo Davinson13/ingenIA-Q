@@ -5,6 +5,7 @@ import {
     Users, Search, UserCog, GraduationCap,
     X, Hand, AlertTriangle
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -118,11 +119,11 @@ export const AdminUsersPage = () => {
         if (!editingUser) return;
         try {
             await api.put(`/admin/users/${editingUser.id}`, formData);
-            alert("✅ User updated successfully");
+            toast.success("✅ User updated successfully");
             setEditingUser(null);
             fetchData();
         } catch {
-            alert("Error updating user");
+            toast.error("Error updating user");
         }
     };
 

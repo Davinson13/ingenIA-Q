@@ -6,6 +6,7 @@ import {
     GraduationCap, Layers, ChevronRight, School,
     Edit, Trash2, Save, X
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -171,12 +172,12 @@ export const AdminAcademicPage = () => {
 
         try {
             await api.post('/admin/academic/parallel', { ...parallelForm, subjectId: selectedSubject.id });
-            alert("✅ Parallel created successfully");
+            toast.success("✅ Parallel created successfully");
             setShowParallelModal(false);
             setParallelForm({ code: 'A', capacity: 30, teacherId: '' });
             fetchData();
         } catch {
-            alert("❌ Failed to create parallel. Check if period is active.");
+            toast.error("❌ Failed to create parallel. Check if period is active.");
         }
     };
 
@@ -189,28 +190,45 @@ export const AdminAcademicPage = () => {
         try {
             await api.put(`/admin/course/${id}`, editForm);
             setEditingCourse(null);
-            alert("✅ Course updated successfully");
+            toast.success("✅ Course updated successfully");
             fetchData(); 
         } catch {
-            alert("❌ Failed to update course");
+            toast.error("❌ Failed to update course");
         }
     };
 
-    const handleDeleteCourse = async (id: number) => {
-        if (!confirm("⚠️ Are you sure? This cannot be undone if students are enrolled.")) return;
-        try {
-            await api.delete(`/admin/course/${id}`);
-            alert("🗑️ Course deleted");
-            fetchData();
-        } catch (error: unknown) {
-             // Safe error handling with type narrowing
-             if (error && typeof error === 'object' && 'response' in error) {
-                const apiError = error as { response: { data: { error: string } } };
-                alert(apiError.response?.data?.error || "Error deleting course");
-            } else {
-                alert("Error deleting course");
-            }
-        }
+    /**
+     * Handle Delete Course
+     * FIX: Using toast with action button instead of confirm() or if(!toast).
+     * The API call is now INSIDE the onClick handler of the toast.
+     */
+    const handleDeleteCourse = (id: number) => {
+        toast("⚠️ Are you sure?", {
+            description: "This cannot be undone if students are enrolled.",
+            action: {
+                label: "Delete",
+                onClick: async () => {
+                    try {
+                        await api.delete(`/admin/course/${id}`);
+                        toast.success("🗑️ Course deleted");
+                        fetchData();
+                    } catch (error: unknown) {
+                         // Safe error handling with type narrowing
+                         if (error && typeof error === 'object' && 'response' in error) {
+                            const apiError = error as { response: { data: { error: string } } };
+                            toast.error(apiError.response?.data?.error || "Error deleting course");
+                        } else {
+                            toast.error("Error deleting course");
+                        }
+                    }
+                },
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {} // 🔥 FIX: Empty function to satisfy TypeScript
+            },
+            duration: 5000, // Give user time to decide
+        });
     };
 
     // --- Handlers: Schedule Management ---
@@ -228,22 +246,37 @@ export const AdminAcademicPage = () => {
                 ...scheduleForm,
                 parallelId: currentParallelForSchedule.id
             });
-            alert("Schedule added");
+            toast.success("Schedule added");
             setScheduleForm({ dayOfWeek: 1, startTime: '', endTime: '' });
             fetchData();
         } catch {
-            alert("Failed to add schedule block");
+            toast.error("Failed to add schedule block");
         }
     };
 
-    const handleDeleteSchedule = async (scheduleId: number) => {
-        if(!confirm("Delete this time block?")) return;
-        try {
-            await api.delete(`/admin/schedule/${scheduleId}`);
-            fetchData();
-        } catch {
-            alert("Failed to delete schedule");
-        }
+    /**
+     * Handle Delete Schedule
+     * FIX: Using toast with action button.
+     */
+    const handleDeleteSchedule = (scheduleId: number) => {
+        toast("Delete this time block?", {
+            action: {
+                label: "Delete",
+                onClick: async () => {
+                    try {
+                        await api.delete(`/admin/schedule/${scheduleId}`);
+                        toast.success("Schedule deleted");
+                        fetchData();
+                    } catch {
+                        toast.error("Failed to delete schedule");
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {} // 🔥 FIX: Empty function to satisfy TypeScript
+            }
+        });
     };
 
     return (

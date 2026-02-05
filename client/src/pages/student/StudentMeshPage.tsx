@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../api/axios';
 import { Check, X, Clock, Lock, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -25,7 +26,7 @@ export const StudentMeshPage = () => {
     useEffect(() => {
         api.get<MeshSubject[]>('/student/catalog/all')
             .then(res => setSubjects(res.data))
-            .catch(() => alert("Error loading curriculum."))
+            .catch(() => toast.warning("Error loading curriculum."))
             .finally(() => setLoading(false));
     }, []);
 

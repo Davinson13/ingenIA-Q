@@ -5,6 +5,7 @@ import {
     Calendar, Plus, Clock,
     AlertCircle, Search, Trash2, Edit,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -44,6 +45,7 @@ export const AdminPeriodsPage = () => {
             setPeriods(res.data);
         } catch {
             console.error("Error fetching periods");
+            toast.error("Error loading periods");
         } finally {
             setLoading(false);
         }
@@ -80,48 +82,73 @@ export const AdminPeriodsPage = () => {
     // Handle Form Submission (Create or Update)
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        try {
-            if (isEditing) {
-                await api.put(`/admin/period/data/${form.id}`, form);
-                alert("✅ Period updated successfully");
-            } else {
-                await api.post('/admin/period', form);
-                alert("✅ Period created successfully");
-            }
-            setShowModal(false);
-            fetchPeriods();
-        } catch {
-            alert("❌ Failed to save period");
-        }
+        
+        // Construct the promise for toast tracking
+        const savePromise = isEditing 
+            ? api.put(`/admin/period/data/${form.id}`, form) 
+            : api.post('/admin/period', form);
+
+        toast.promise(savePromise, {
+            loading: 'Saving period...',
+            success: () => {
+                setShowModal(false);
+                fetchPeriods();
+                return isEditing ? "✅ Period updated successfully" : "✅ Period created successfully";
+            },
+            error: "❌ Failed to save period"
+        });
     };
 
     // Toggle Active Status
-    const toggleStatus = async (id: number) => {
-        if (!confirm("Change period status? This will deactivate other active periods.")) return;
-        try {
-            await api.put(`/admin/period/${id}`);
-            fetchPeriods();
-        } catch {
-            alert("Error changing status");
-        }
+    const toggleStatus = (id: number) => {
+        toast("Change period status?", {
+            description: "This will deactivate other active periods.",
+            action: {
+                label: "Confirm",
+                onClick: async () => {
+                    try {
+                        await api.put(`/admin/period/${id}`);
+                        toast.success("Status updated successfully");
+                        fetchPeriods();
+                    } catch {
+                        toast.error("Error changing status");
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
+            }
+        });
     };
 
     // Delete Period
-    const handleDelete = async (id: number) => {
-        if (!confirm("⚠️ Are you sure? This period must not have associated courses.")) return;
-        try {
-            await api.delete(`/admin/period/${id}`);
-            alert("🗑️ Period deleted");
-            fetchPeriods();
-        } catch (error: unknown) {
-             // Safe error handling with type narrowing
-             if (error && typeof error === 'object' && 'response' in error) {
-                const apiError = error as { response: { data: { error: string } } };
-                alert(apiError.response?.data?.error || "Error deleting period");
-            } else {
-                alert("Error deleting period");
+    const handleDelete = (id: number) => {
+        toast("⚠️ Are you sure?", {
+            description: "This period must not have associated courses.",
+            action: {
+                label: "Delete",
+                onClick: async () => {
+                    try {
+                        await api.delete(`/admin/period/${id}`);
+                        toast.success("🗑️ Period deleted");
+                        fetchPeriods();
+                    } catch (error: unknown) {
+                         // Safe error handling with type narrowing
+                         if (error && typeof error === 'object' && 'response' in error) {
+                            const apiError = error as { response: { data: { error: string } } };
+                            toast.error(apiError.response?.data?.error || "Error deleting period");
+                        } else {
+                            toast.error("Error deleting period");
+                        }
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
             }
-        }
+        });
     };
 
     return (
