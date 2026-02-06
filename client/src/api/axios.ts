@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 
 // Create an Axios instance with base configuration
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api', // Ensure this matches your backend URL
+  baseURL: import.meta.env.VITE_API_URL, // Ensure this matches your backend URL
   withCredentials: true,
 });
 
