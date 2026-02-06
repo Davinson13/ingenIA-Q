@@ -7,6 +7,8 @@ import {
 import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
 
+import { toast } from 'sonner';
+
 // --- TYPES ---
 
 interface AgendaEvent {
@@ -80,13 +82,13 @@ export const TeacherCalendar = () => {
         e.preventDefault();
         try {
             await api.post('/teacher/calendar/personal', form);
-            alert("✅ Activity created successfully");
+            toast.success("✅ Activity created successfully");
             setShowModal(false);
             setForm({ title: '', description: '', date: '', time: '' });
             fetchEvents();
         } catch (error) {
             console.error(error);
-            alert("❌ Error creating activity");
+            toast.error("❌ Error creating activity");
         }
     };
 

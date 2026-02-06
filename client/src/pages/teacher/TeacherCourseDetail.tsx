@@ -6,6 +6,7 @@ import {
     ChevronDown, ChevronUp, Clock, Save, XCircle,
     GraduationCap, AlertTriangle, XOctagon, Calendar, BookOpen, Trash2
 } from 'lucide-react';
+import { toast } from 'sonner'; // Import toast
 
 import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
@@ -122,6 +123,7 @@ export const TeacherCourseDetail = () => {
             } catch (error) {
                 console.error("Error loading course info", error);
                 setCourseHeader({ name: "Error loading", code: "-" });
+                toast.error("Failed to load course header");
             }
         };
         loadCourseInfo();
@@ -167,30 +169,51 @@ export const TeacherCourseDetail = () => {
                 const avg = res.data.courseAverage || 0;
                 setStats({ approved, suspended, failed, avg });
             }
-        } catch (error) { console.error("Error loading grades", error); }
+        } catch (error) { 
+            console.error("Error loading grades", error);
+            toast.error("Failed to load grade matrix");
+        }
     }, [id]);
 
     // --- HANDLER: KICK STUDENT ---
-    const handleKickStudent = async (studentId: number) => {
-        if (!confirm("Are you sure you want to remove this student from the course?")) return;
+    const handleKickStudent = (studentId: number) => {
+        toast("Remove student?", {
+            description: "Are you sure you want to remove this student from the course?",
+            action: {
+                label: "Remove",
+                onClick: async () => {
+                    try {
+                        // endpoint: delete /teacher/student with body
+                        await api.delete('/teacher/student', {
+                            data: {
+                                subjectId: parseInt(id!),
+                                studentId
+                            }
+                        });
 
-        try {
-            // endpoint: delete /teacher/student with body
-            await api.delete('/teacher/student', {
-                data: {
-                    subjectId: parseInt(id!),
-                    studentId
+                        toast.success("Student removed successfully.");
+                        // Reload data based on active tab
+                        if(activeTab === 'STUDENTS') {
+                             // Quick fix: reload to refresh list
+                             window.location.reload(); 
+                        }
+                    } catch (error: unknown) {
+                        console.error(error);
+                        // Type-safe error handling
+                        if (error && typeof error === 'object' && 'response' in error) {
+                            const err = error as AxiosError<{ error: string }>;
+                            toast.error(err.response?.data?.error || "Error removing student");
+                        } else {
+                            toast.error("Error removing student");
+                        }
+                    }
                 }
-            });
-
-            alert("Student removed.");
-            window.location.reload();
-        } catch (error: unknown) {
-            console.error(error);
-            // Type-safe error handling
-            const err = error as AxiosError<{ error: string }>;
-            alert(err.response?.data?.error || "Error removing student");
-        }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
+            }
+        });
     };
 
     // --- 3. MAIN DATA LOAD EFFECT ---
@@ -240,24 +263,39 @@ export const TeacherCourseDetail = () => {
 
             setShowAddForm(false);
             setNewActivity({ title: '', description: '', date: '', time: '', type: 'INDIVIDUAL' });
-            alert("✅ Activity created successfully");
+            toast.success("✅ Activity created successfully");
         } catch (error: unknown) {
             console.error(error);
             const err = error as AxiosError;
             if (err.response && err.response.status === 400) {
-                alert("❌ Error: " + (err.response.data as string));
+                toast.error("❌ Error: " + (err.response.data as string));
             } else {
-                alert("❌ Error creating activity");
+                toast.error("❌ Error creating activity");
             }
         }
     };
 
-    const handleDeleteActivity = async (activityId: number) => {
-        if (!confirm("Delete activity? Associated grades will be removed.")) return;
-        try {
-            await api.delete(`/teacher/events/${activityId}`);
-            setActivities(prev => prev.filter(a => a.id !== activityId));
-        } catch (error) { console.error(error); }
+    const handleDeleteActivity = (activityId: number) => {
+        toast("Delete activity?", {
+            description: "Associated grades will be removed permanently.",
+            action: {
+                label: "Delete",
+                onClick: async () => {
+                    try {
+                        await api.delete(`/teacher/events/${activityId}`);
+                        setActivities(prev => prev.filter(a => a.id !== activityId));
+                        toast.success("Activity deleted");
+                    } catch (error) { 
+                        console.error(error); 
+                        toast.error("Failed to delete activity");
+                    }
+                }
+            },
+            cancel: {
+                label: "Cancel",
+                onClick: () => {}
+            }
+        });
     };
 
     const handleSaveAttendance = async () => {
@@ -265,14 +303,14 @@ export const TeacherCourseDetail = () => {
         try {
             const records = students.map(s => ({ enrollmentId: s.enrollmentId, status: s.status }));
             await api.post('/teacher/attendance', { date: attendanceDate, records });
-            alert("✅ Attendance saved successfully");
+            toast.success("✅ Attendance saved successfully");
         } catch (error: unknown) {
             console.error(error);
             const err = error as AxiosError<{ error: string }>;
             if (err.response && err.response.status === 400) {
-                alert("⚠️ Error: " + err.response.data);
+                toast.error("⚠️ Error: " + err.response.data);
             } else {
-                alert("❌ Error saving attendance");
+                toast.error("❌ Error saving attendance");
             }
         } finally {
             setSaving(false);
