@@ -5,6 +5,7 @@ import {
 
 import api from '../../api/axios';
 import { getTheme } from '../../utils/themeUtils';
+import { toast } from 'sonner';
 
 // --- INTERFACES ---
 
@@ -109,18 +110,18 @@ export const TeacherTutoring = () => {
         const selectedDateTime = new Date(`${form.date}T${form.time}`);
         
         if (selectedDateTime < now) {
-            alert("⚠️ You cannot schedule tutoring sessions in the past.");
+            toast.warning("⚠️ You cannot schedule tutoring sessions in the past.");
             return;
         }
 
         const hour = parseInt(form.time.split(':')[0]);
         if (hour < 7 || hour > 22) {
-            alert("⚠️ Allowed hours are from 07:00 AM to 10:00 PM.");
+            toast.warning("⚠️ Allowed hours are from 07:00 AM to 10:00 PM.");
             return;
         }
 
         if (hour >= 19 && form.modality !== 'VIRTUAL') {
-            alert("⚠️ Night sessions (19:00 - 22:00) must be VIRTUAL.");
+            toast.warning("⚠️ Night sessions (19:00 - 22:00) must be VIRTUAL.");
             setForm(prev => ({ ...prev, modality: 'VIRTUAL' }));
             return;
         }
@@ -128,12 +129,12 @@ export const TeacherTutoring = () => {
         setCreating(true);
         try {
             await api.post('/teacher/tutoring', form);
-            alert("✅ Tutoring session created successfully");
+            toast.success("✅ Tutoring session created successfully");
             setForm({ date: '', time: '', subjectId: '0', capacity: 15, notes: '', modality: 'PRESENCIAL' });
             fetchData();
         } catch (error) {
             console.error(error);
-            alert("❌ Error creating tutoring session");
+            toast.error("❌ Error creating tutoring session");
         } finally {
             setCreating(false);
         }

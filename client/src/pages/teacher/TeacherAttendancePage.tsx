@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Calendar, UserCheck, CheckCircle2, XCircle, Clock, Save, Search } from 'lucide-react';
 
 import api from '../../api/axios';
+import { toast } from 'sonner';
+
 
 // --- INTERFACES ---
 
@@ -87,10 +89,10 @@ export const TeacherAttendancePage = () => {
         try {
             const records = students.map(s => ({ enrollmentId: s.enrollmentId, status: s.status }));
             await api.post('/teacher/attendance', { date: selectedDate, records });
-            alert(`✅ Attendance saved successfully for ${selectedDate}`);
+            toast.success(`✅ Attendance saved successfully for ${selectedDate}`);
         } catch (error) {
             console.error(error);
-            alert("❌ Failed to save attendance");
+            toast.error("❌ Failed to save attendance");
         } finally { 
             setSaving(false); 
         }
